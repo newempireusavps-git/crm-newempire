@@ -569,6 +569,28 @@ export function CampaignsPage() {
   const { campaigns, loading, create, remove } = useCampaigns()
   const [showCreate, setShowCreate]       = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting]           = useState<string | null>(null)
+
+  async function handleDelete(c: Campaign) {
+    setDeleting(c.id)
+    try {
+      // Delete n8n workflow first (best-effort)
+      if (c.n8n_workflow_id) {
+        const apiKey = localStorage.getItem('n8n_api_key') ?? ''
+        if (apiKey) {
+          await fetch(`${N8N_BASE}/api/v1/workflows/${c.n8n_workflow_id}`, {
+            method: 'DELETE',
+            headers: { 'X-N8N-API-KEY': apiKey },
+          }).catch(() => {}) // ignore if already gone
+        }
+      }
+      await remove(c.id)
+    } finally {
+      setDeleting(null)
+      setConfirmDelete(null)
+    }
+  }
+
   const [selected, setSelected]           = useState<Campaign | null>(null)
 
   if (selected) {
@@ -644,7 +666,10 @@ export function CampaignsPage() {
                           </button>
                           {confirmDelete === c.id ? (
                             <>
-                              <button onClick={() => { void remove(c.id); setConfirmDelete(null) }} className="text-xs text-red-400 font-medium">Sim</button>
+                              <button onClick={() => void handleDelete(c)} disabled={deleting === c.id}
+                                className="text-xs text-red-400 font-medium disabled:opacity-50">
+                                {deleting === c.id ? '…' : 'Sim'}
+                              </button>
                               <button onClick={() => setConfirmDelete(null)} className="text-xs text-gray-500">Não</button>
                             </>
                           ) : (
