@@ -48,6 +48,9 @@ export interface Campaign {
   is_active: boolean
   color: string
   lead_count?: number
+  n8n_workflow_id?: string | null
+  n8n_workflow_url?: string | null
+  steps?: CampaignStep[]
 }
 
 export interface LeadActivity {
@@ -60,6 +63,20 @@ export interface LeadActivity {
   metadata: Record<string, unknown>
 }
 
+export type CampaignChannel = 'email' | 'whatsapp' | 'instagram' | 'facebook' | 'sms'
+
+export interface CampaignStep {
+  id: string
+  created_at: string
+  updated_at: string
+  campaign_id: string
+  step_order: number
+  channel: CampaignChannel
+  template_id: string | null
+  delay_days: number
+  template?: EmailTemplate
+}
+
 export interface EmailTemplate {
   id: string
   created_at: string
@@ -70,6 +87,7 @@ export interface EmailTemplate {
   subject: string
   html_body: string
   is_active: boolean
+  channel: CampaignChannel
 }
 
 export type FilterPeriodo = 'hoje' | 'semana' | 'mes' | 'todos'

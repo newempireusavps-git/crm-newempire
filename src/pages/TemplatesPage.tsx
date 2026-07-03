@@ -1,21 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
 import { Save, Eye, EyeOff, Mail, MessageSquare, AtSign, Share2, Phone,
-         ChevronDown, ChevronUp, Loader2, Plus, X } from 'lucide-react'
-import type { EmailTemplate, CampaignChannel } from '@/types/lead'
-import { fetchEmailTemplates, updateEmailTemplate, createEmailTemplate } from '@/lib/supabase'
+         ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2 } from 'lucide-react'
+import type { EmailTemplate, CampaignChannel, Campaign, CampaignStep } from '@/types/lead'
+import {
+  fetchEmailTemplates, updateEmailTemplate, createEmailTemplate,
+  fetchCampaigns, fetchCampaignSteps, saveCampaignSteps, fetchCampaignLeadIds,
+} from '@/lib/supabase'
+import { useLeads } from '@/hooks/useLeads'
 import { cn } from '@/lib/utils'
 
-const CHANNEL_META: Record<CampaignChannel, { label: string; icon: React.ReactNode; color: string }> = {
+export const CHANNEL_META: Record<CampaignChannel, { label: string; icon: React.ReactNode; color: string }> = {
   email:     { label: 'Email',     icon: <Mail size={14} />,          color: 'text-blue-400 border-blue-400/30 bg-blue-400/10' },
   whatsapp:  { label: 'WhatsApp',  icon: <MessageSquare size={14} />, color: 'text-green-400 border-green-400/30 bg-green-400/10' },
   sms:       { label: 'SMS',       icon: <Phone size={14} />,         color: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10' },
-  instagram: { label: 'Instagram', icon: <AtSign size={14} />,        color: 'text-pink-400 border-pink-400/30 bg-pink-400/10' },
-  facebook:  { label: 'Facebook',  icon: <Share2 size={14} />,        color: 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10' },
+  instagram: { label: 'Instagram (DM)', icon: <AtSign size={14} />,   color: 'text-pink-400 border-pink-400/30 bg-pink-400/10' },
+  facebook:  { label: 'Messenger', icon: <Share2 size={14} />,        color: 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10' },
 }
 
+// ─── Preview pane ─────────────────────────────────────────────────────────────
 function PreviewPane({ html, isHtml }: { html: string; isHtml: boolean }) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-
   useEffect(() => {
     if (!isHtml || !iframeRef.current) return
     const doc = iframeRef.current.contentDocument
@@ -30,13 +34,10 @@ function PreviewPane({ html, isHtml }: { html: string; isHtml: boolean }) {
       </pre>
     )
   }
-
-  return (
-    <iframe ref={iframeRef} className="w-full h-full rounded-lg border-0 bg-white"
-      title="Email preview" sandbox="allow-same-origin" />
-  )
+  return <iframe ref={iframeRef} className="w-full h-full rounded-lg border-0 bg-white" title="Preview" sandbox="allow-same-origin" />
 }
 
+// ─── Template editor (inline) ─────────────────────────────────────────────────
 function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
   const [name, setName]       = useState(template.name)
   const [desc, setDesc]       = useState(template.description ?? '')
@@ -48,25 +49,17 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
   const [error, setError]     = useState('')
 
   const isHtml = template.channel === 'email'
-  const dirty = name !== template.name || desc !== (template.description ?? '') ||
-                subject !== template.subject || body !== template.html_body
+  const dirty  = name !== template.name || desc !== (template.description ?? '') ||
+                 subject !== template.subject || body !== template.html_body
 
   async function handleSave() {
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
-      await updateEmailTemplate(template.id, {
-        name: name.trim(),
-        description: desc.trim() || null,
-        subject: subject.trim(),
-        html_body: body,
-      })
+      await updateEmailTemplate(template.id, { name: name.trim(), description: desc.trim() || null, subject: subject.trim(), html_body: body })
       onSaved({ ...template, name: name.trim(), description: desc.trim() || null, subject: subject.trim(), html_body: body })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Erro ao salvar')
-    } finally { setSaving(false) }
+      setSaved(true); setTimeout(() => setSaved(false), 2500)
+    } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao salvar') }
+    finally { setSaving(false) }
   }
 
   return (
@@ -97,9 +90,7 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
       </p>
 
       <div className="flex items-center justify-between">
-        <label className="text-xs text-gray-400 uppercase tracking-wide">
-          {isHtml ? 'Código HTML' : 'Mensagem'}
-        </label>
+        <label className="text-xs text-gray-400 uppercase tracking-wide">{isHtml ? 'Código HTML' : 'Mensagem'}</label>
         {isHtml && (
           <button type="button" onClick={() => setPreview((p) => !p)}
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
@@ -110,26 +101,21 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
       </div>
 
       {preview && isHtml ? (
-        <div className="h-[480px] rounded-lg overflow-hidden border border-empire-border">
+        <div className="h-[400px] rounded-lg overflow-hidden border border-empire-border">
           <PreviewPane html={body} isHtml={isHtml} />
         </div>
       ) : (
         <textarea value={body} onChange={(e) => setBody(e.target.value)}
-          rows={isHtml ? 20 : 10} spellCheck={false}
+          rows={isHtml ? 18 : 8} spellCheck={false}
           className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y" />
       )}
 
       {error && <p className="text-red-400 text-xs">{error}</p>}
-
       <div className="flex items-center justify-end gap-3">
-        {saved && <span className="text-green-400 text-xs">Salvo com sucesso ✓</span>}
+        {saved && <span className="text-green-400 text-xs">Salvo ✓</span>}
         <button onClick={() => void handleSave()} disabled={saving || !dirty}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors',
-            dirty
-              ? 'bg-empire-gold text-empire-dark hover:bg-empire-gold/90'
-              : 'bg-empire-card text-gray-500 cursor-not-allowed border border-empire-border',
-          )}>
+          className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors',
+            dirty ? 'bg-empire-gold text-empire-dark hover:bg-empire-gold/90' : 'bg-empire-card text-gray-500 cursor-not-allowed border border-empire-border')}>
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
@@ -138,9 +124,10 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
   )
 }
 
+// ─── Template card ─────────────────────────────────────────────────────────────
 function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
   const [open, setOpen] = useState(false)
-  const ch = (template.channel ?? 'email') as CampaignChannel
+  const ch   = (template.channel ?? 'email') as CampaignChannel
   const meta = CHANNEL_META[ch]
 
   return (
@@ -150,18 +137,13 @@ function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved:
         <span className="text-empire-gold">{meta.icon}</span>
         <div className="flex-1 min-w-0">
           <p className="text-white font-medium text-sm">{template.name}</p>
-          {template.description && (
-            <p className="text-gray-500 text-xs mt-0.5 truncate">{template.description}</p>
-          )}
+          {template.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{template.description}</p>}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className={cn('text-xs px-2 py-0.5 rounded-full border', meta.color)}>
-            {meta.label}
-          </span>
+          <span className={cn('text-xs px-2 py-0.5 rounded-full border', meta.color)}>{meta.label}</span>
           {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
         </div>
       </button>
-
       {open && (
         <div className="px-5 pb-5 border-t border-empire-border pt-4">
           <TemplateEditor template={template} onSaved={onSaved} />
@@ -176,31 +158,60 @@ function CreateTemplateModal({ onClose, onCreate }: {
   onClose: () => void
   onCreate: (t: EmailTemplate) => void
 }) {
-  const [name, setName]       = useState('')
-  const [desc, setDesc]       = useState('')
-  const [channel, setChannel] = useState<CampaignChannel>('email')
-  const [subject, setSubject] = useState('')
-  const [body, setBody]       = useState('')
-  const [saving, setSaving]   = useState(false)
-  const [error, setError]     = useState('')
+  const { leads } = useLeads()
+  const [name, setName]               = useState('')
+  const [desc, setDesc]               = useState('')
+  const [channel, setChannel]         = useState<CampaignChannel>('email')
+  const [subject, setSubject]         = useState('')
+  const [body, setBody]               = useState('')
+  const [campaigns, setCampaigns]     = useState<Campaign[]>([])
+  const [campaignId, setCampaignId]   = useState('')
+  const [steps, setSteps]             = useState<CampaignStep[]>([])
+  const [stepOrder, setStepOrder]     = useState<number | null>(null)
+  const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set())
+  const [leadSearch, setLeadSearch]   = useState('')
+  const [saving, setSaving]           = useState(false)
+  const [error, setError]             = useState('')
 
   const isHtml = channel === 'email'
+
+  useEffect(() => { void fetchCampaigns().then(setCampaigns) }, [])
+
+  useEffect(() => {
+    if (!campaignId) { setSteps([]); setStepOrder(null); setEnrolledIds(new Set()); return }
+    void fetchCampaignSteps(campaignId).then(setSteps)
+    void fetchCampaignLeadIds(campaignId).then((ids) => setEnrolledIds(new Set(ids)))
+  }, [campaignId])
+
+  const filteredLeads = leads.filter((l) =>
+    `${l.first_name} ${l.last_name}`.toLowerCase().includes(leadSearch.toLowerCase()) ||
+    (l.email ?? '').toLowerCase().includes(leadSearch.toLowerCase())
+  )
+  const campaignLeads = filteredLeads.filter((l) => enrolledIds.has(l.id))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('Nome obrigatório'); return }
-    setSaving(true)
-    setError('')
+    setSaving(true); setError('')
     try {
       const created = await createEmailTemplate({
         name: name.trim(),
         description: desc.trim() || null,
         channel,
-        subject: subject.trim() || name.trim(),
+        subject: isHtml ? (subject.trim() || name.trim()) : name.trim(),
         html_body: body,
         template_key: `custom_${Date.now()}`,
         is_active: true,
       })
+
+      // If a step was selected, assign this template to it
+      if (campaignId && stepOrder !== null) {
+        const updated = steps.map((s) =>
+          s.step_order === stepOrder ? { ...s, template_id: created.id } : s
+        )
+        await saveCampaignSteps(campaignId, updated.map(({ id: _id, created_at: _c, updated_at: _u, template: _t, ...rest }) => rest))
+      }
+
       onCreate(created)
       onClose()
     } catch (e) {
@@ -210,67 +221,132 @@ function CreateTemplateModal({ onClose, onCreate }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-empire-card border border-empire-border rounded-xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="px-6 py-4 border-b border-empire-border flex items-center justify-between sticky top-0 bg-empire-card z-10">
+      <div className="bg-empire-card border border-empire-border rounded-xl w-full max-w-2xl shadow-2xl max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-empire-border flex items-center justify-between shrink-0">
           <h2 className="text-white font-semibold">Novo Template</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
         </div>
-        <form onSubmit={(e) => void handleSubmit(e)} className="px-6 py-5 space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+        <form onSubmit={(e) => void handleSubmit(e)} className="overflow-y-auto flex-1">
+          <div className="px-6 py-5 space-y-5">
+
+            {/* Row 1: Canal + Nome */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Canal *</label>
+                <select value={channel} onChange={(e) => setChannel(e.target.value as CampaignChannel)}
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
+                  {(Object.keys(CHANNEL_META) as CampaignChannel[]).map((c) => (
+                    <option key={c} value={c}>{CHANNEL_META[c].label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Nome *</label>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Boas-vindas"
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+              </div>
+            </div>
+
+            {/* Row 2: Campanha + Etapa */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Campanha</label>
+                <select value={campaignId} onChange={(e) => setCampaignId(e.target.value)}
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
+                  <option value="">— Selecionar campanha —</option>
+                  {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Etapa do workflow</label>
+                <select value={stepOrder ?? ''} onChange={(e) => setStepOrder(e.target.value ? Number(e.target.value) : null)}
+                  disabled={!campaignId || steps.length === 0}
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 disabled:opacity-40">
+                  <option value="">— Selecionar etapa —</option>
+                  {steps.map((s) => (
+                    <option key={s.step_order} value={s.step_order}>
+                      Etapa {s.step_order} — {CHANNEL_META[s.channel as CampaignChannel]?.label ?? s.channel}
+                    </option>
+                  ))}
+                </select>
+                {campaignId && steps.length === 0 && (
+                  <p className="text-xs text-yellow-500 mt-1">Esta campanha não tem etapas ainda. Adicione-as primeiro.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Descrição */}
             <div>
-              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Nome *</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Boas-vindas"
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Descrição</label>
+              <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Opcional"
                 className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
             </div>
+
+            {/* Assunto (email only) */}
+            {isHtml && (
+              <div>
+                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Assunto do Email</label>
+                <input value={subject} onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Ex: Sua cozinha transformada — New Empire Remodeling"
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+              </div>
+            )}
+
+            {/* Conteúdo */}
             <div>
-              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Canal</label>
-              <select value={channel} onChange={(e) => setChannel(e.target.value as CampaignChannel)}
-                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
-                {(Object.keys(CHANNEL_META) as CampaignChannel[]).map((c) => (
-                  <option key={c} value={c}>{CHANNEL_META[c].label}</option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs text-gray-400 uppercase tracking-wide">{isHtml ? 'Conteúdo HTML' : 'Mensagem'}</label>
+                <span className="text-xs text-gray-500">
+                  Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para o nome do lead
+                </span>
+              </div>
+              <textarea value={body} onChange={(e) => setBody(e.target.value)}
+                rows={isHtml ? 12 : 5} spellCheck={false}
+                placeholder={isHtml ? '<p>Olá {{first_name}},</p>' : 'Olá {{first_name}}, tudo bem? 👋'}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y placeholder:text-gray-600" />
             </div>
+
+            {/* Leads segmentados da campanha */}
+            {campaignId && enrolledIds.size > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users size={14} className="text-gray-400" />
+                  <label className="text-xs text-gray-400 uppercase tracking-wide">
+                    Leads nesta campanha ({enrolledIds.size})
+                  </label>
+                </div>
+                <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
+                  placeholder="Filtrar leads…"
+                  className="w-full bg-empire-navy border border-empire-border text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-empire-gold/50 placeholder:text-gray-600 mb-2" />
+                <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
+                  {campaignLeads.map((lead) => (
+                    <div key={lead.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-empire-navy border border-empire-border">
+                      <CheckCircle2 size={13} className="text-empire-gold shrink-0" />
+                      <span className="text-sm text-white">{lead.first_name} {lead.last_name}</span>
+                      <span className="text-xs text-gray-500 ml-auto">{lead.status}</span>
+                    </div>
+                  ))}
+                  {campaignLeads.length === 0 && (
+                    <p className="text-xs text-gray-600 text-center py-2">Nenhum lead encontrado</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {error && <p className="text-red-400 text-xs">{error}</p>}
           </div>
 
-          <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Descrição</label>
-            <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Opcional"
-              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
-          </div>
-
-          {isHtml && (
-            <div>
-              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Assunto do Email</label>
-              <input value={subject} onChange={(e) => setSubject(e.target.value)}
-                placeholder="Ex: Sua cozinha transformada — New Empire Remodeling"
-                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
-            </div>
-          )}
-
-          <div>
-            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">
-              {isHtml ? 'Conteúdo HTML' : 'Mensagem'}
-            </label>
-            <p className="text-xs text-gray-500 mb-2">
-              Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para o nome do lead.
-            </p>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)}
-              rows={isHtml ? 14 : 6} spellCheck={false}
-              placeholder={isHtml ? '<p>Olá {{first_name}},</p>' : 'Olá {{first_name}}, tudo bem?'}
-              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y placeholder:text-gray-600" />
-          </div>
-
-          {error && <p className="text-red-400 text-xs">{error}</p>}
-
-          <div className="flex gap-3 pt-1">
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-empire-border flex gap-3 shrink-0 sticky bottom-0 bg-empire-card">
             <button type="button" onClick={onClose}
               className="flex-1 py-2 rounded-lg border border-empire-border text-gray-400 text-sm hover:text-white transition-colors">
               Cancelar
             </button>
             <button type="submit" disabled={saving}
               className="flex-1 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 transition-colors disabled:opacity-50">
-              {saving ? 'Criando…' : 'Criar Template'}
+              {saving ? 'Criando…' : stepOrder !== null ? 'Criar e Atribuir à Etapa' : 'Criar Template'}
             </button>
           </div>
         </form>
@@ -281,10 +357,11 @@ function CreateTemplateModal({ onClose, onCreate }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export function TemplatesPage() {
-  const [templates, setTemplates] = useState<EmailTemplate[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [error, setError]         = useState('')
+  const [templates, setTemplates]   = useState<EmailTemplate[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
   const [showCreate, setShowCreate] = useState(false)
+  const [filter, setFilter]         = useState<CampaignChannel | 'all'>('all')
 
   useEffect(() => {
     fetchEmailTemplates()
@@ -293,13 +370,7 @@ export function TemplatesPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  function handleSaved(updated: EmailTemplate) {
-    setTemplates((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
-  }
-
-  function handleCreated(t: EmailTemplate) {
-    setTemplates((prev) => [...prev, t])
-  }
+  const visible = filter === 'all' ? templates : templates.filter((t) => t.channel === filter)
 
   return (
     <>
@@ -308,7 +379,7 @@ export function TemplatesPage() {
           <div>
             <h1 className="text-2xl font-bold text-white">Templates de Mensagens</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Edite os textos enviados nos fluxos. As alterações são aplicadas imediatamente — sem precisar acessar o n8n.
+              Edite os textos enviados nos fluxos sem precisar acessar o n8n.
             </p>
           </div>
           <button onClick={() => setShowCreate(true)}
@@ -317,35 +388,63 @@ export function TemplatesPage() {
           </button>
         </div>
 
+        {/* Filter chips */}
+        {templates.length > 0 && (
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setFilter('all')}
+              className={cn('px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                filter === 'all' ? 'bg-empire-gold text-empire-dark border-empire-gold' : 'border-empire-border text-gray-400 hover:text-white')}>
+              Todos ({templates.length})
+            </button>
+            {(Object.keys(CHANNEL_META) as CampaignChannel[])
+              .filter((c) => templates.some((t) => t.channel === c))
+              .map((c) => (
+                <button key={c} onClick={() => setFilter(c)}
+                  className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                    filter === c
+                      ? cn(CHANNEL_META[c].color, 'border-current')
+                      : 'border-empire-border text-gray-400 hover:text-white')}>
+                  {CHANNEL_META[c].icon}{CHANNEL_META[c].label}
+                  <span className="opacity-60">({templates.filter((t) => t.channel === c).length})</span>
+                </button>
+              ))}
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center gap-2 text-gray-400 text-sm py-12">
             <Loader2 size={16} className="animate-spin" /> Carregando templates…
           </div>
         ) : error ? (
           <p className="text-red-400 text-sm">{error}</p>
-        ) : templates.length === 0 ? (
+        ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
             <Mail size={32} className="text-empire-muted" />
-            <p className="text-white font-medium">Nenhum template ainda</p>
+            <p className="text-white font-medium">{templates.length === 0 ? 'Nenhum template ainda' : 'Nenhum template neste canal'}</p>
             <p className="text-empire-muted text-sm max-w-xs">
-              Crie templates de email, WhatsApp, SMS e redes sociais para usar nas campanhas.
+              Crie templates de Email, WhatsApp, SMS, Instagram DM e Messenger para usar nas campanhas.
             </p>
             <button onClick={() => setShowCreate(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 mt-1">
-              <Plus size={14} /> Criar primeiro template
+              <Plus size={14} /> Criar template
             </button>
           </div>
         ) : (
           <div className="space-y-3">
-            {templates.map((t) => (
-              <TemplateCard key={t.id} template={t} onSaved={handleSaved} />
+            {visible.map((t) => (
+              <TemplateCard key={t.id} template={t} onSaved={(updated) =>
+                setTemplates((prev) => prev.map((x) => x.id === updated.id ? updated : x))
+              } />
             ))}
           </div>
         )}
       </div>
 
       {showCreate && (
-        <CreateTemplateModal onClose={() => setShowCreate(false)} onCreate={handleCreated} />
+        <CreateTemplateModal
+          onClose={() => setShowCreate(false)}
+          onCreate={(t) => setTemplates((prev) => [...prev, t])}
+        />
       )}
     </>
   )
