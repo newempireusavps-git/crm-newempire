@@ -5,11 +5,11 @@ import {
   CheckCircle2, Loader2, Save, Zap, Clock, X,
 } from 'lucide-react'
 import { useCampaigns } from '@/hooks/useCampaigns'
-import { useLeads } from '@/hooks/useLeads'
-import type { Campaign, CampaignStep, CampaignChannel, EmailTemplate } from '@/types/lead'
+import type { Campaign, CampaignStep, CampaignChannel, EmailTemplate, Lead } from '@/types/lead'
 import {
   fetchCampaignSteps, saveCampaignSteps, updateCampaignN8n,
-  fetchEmailTemplates, addLeadToCampaign, removeLeadFromCampaign, fetchCampaignLeadIds,
+  fetchEmailTemplates, addLeadToCampaign, removeLeadFromCampaign,
+  fetchCampaignLeadIds, fetchLeads,
 } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -256,11 +256,11 @@ function StepEditorRow({ step, index, templates, onChange, onRemove }: {
 
 // ─── Campaign Detail ──────────────────────────────────────────────────────────
 function CampaignDetail({ campaign: init, onBack }: { campaign: Campaign; onBack: () => void }) {
-  const { leads } = useLeads()
   const [campaign, setCampaign]       = useState<Campaign>(init)
   const [steps, setSteps]             = useState<CampaignStep[]>([])
   const [draftSteps, setDraftSteps]   = useState<DraftStep[]>([])
   const [templates, setTemplates]     = useState<EmailTemplate[]>([])
+  const [leads, setLeads]             = useState<Lead[]>([])
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set())
   const [editing, setEditing]         = useState(false)
   const [saving, setSaving]           = useState(false)
@@ -275,13 +275,16 @@ function CampaignDetail({ campaign: init, onBack }: { campaign: Campaign; onBack
       fetchCampaignSteps(init.id),
       fetchEmailTemplates(),
       fetchCampaignLeadIds(init.id),
-    ]).then(([s, t, ids]) => {
-      setSteps(s)
-      setDraftSteps(s.map((st) => ({ ...st, _key: st.id })))
-      setTemplates(t)
-      setEnrolledIds(new Set(ids))
-    }).catch((e) => setError(e instanceof Error ? e.message : 'Erro ao carregar dados'))
-    .finally(() => setLoadingData(false))
+      fetchLeads(),
+    ]).then(([s, t, ids, allLeads]) => {
+      setSteps(s as CampaignStep[])
+      setDraftSteps((s as CampaignStep[]).map((st) => ({ ...st, _key: st.id })))
+      setTemplates(t as EmailTemplate[])
+      setEnrolledIds(new Set(ids as string[]))
+      setLeads(allLeads as Lead[])
+    }).catch((e: unknown) => {
+      setError(e instanceof Error ? e.message : 'Erro ao carregar dados')
+    }).finally(() => setLoadingData(false))
   }, [init.id])
 
   function startEdit() {
