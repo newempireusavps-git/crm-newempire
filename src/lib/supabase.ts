@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Lead, Campaign, LeadActivity, EmailTemplate } from '@/types/lead'
+import type { Lead, Campaign, LeadActivity, EmailTemplate, CampaignStep } from '@/types/lead'
 
 const supabaseUrl = 'https://xvcqdizrsfvfuvvgilgm.supabase.co'
 const supabaseAnonKey =
@@ -125,6 +125,51 @@ export async function addActivity(
   if (error) throw error
 }
 
+// ── Campaign Steps ────────────────────────────────────────────────────────────
+
+export async function fetchCampaignSteps(campaignId: string): Promise<CampaignStep[]> {
+  const { data, error } = await supabase
+    .from('campaign_steps')
+    .select('*, template:email_templates(*)')
+    .eq('campaign_id', campaignId)
+    .order('step_order', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as CampaignStep[]
+}
+
+export async function saveCampaignSteps(
+  campaignId: string,
+  steps: Omit<CampaignStep, 'id' | 'created_at' | 'updated_at' | 'template'>[],
+): Promise<void> {
+  await supabase.from('campaign_steps').delete().eq('campaign_id', campaignId)
+  if (steps.length === 0) return
+  const { error } = await supabase.from('campaign_steps').insert(
+    steps.map((s) => ({ ...s, campaign_id: campaignId })),
+  )
+  if (error) throw error
+}
+
+export async function updateCampaignN8n(
+  campaignId: string,
+  n8n_workflow_id: string,
+  n8n_workflow_url: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('campaigns')
+    .update({ n8n_workflow_id, n8n_workflow_url })
+    .eq('id', campaignId)
+  if (error) throw error
+}
+
+export async function fetchCampaignLeadIds(campaignId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('lead_campaigns')
+    .select('lead_id')
+    .eq('campaign_id', campaignId)
+  if (error) throw error
+  return (data ?? []).map((r: { lead_id: string }) => r.lead_id)
+}
+
 // ── Email Templates ──────────────────────────────────────────────────────────
 
 export async function fetchEmailTemplates(): Promise<EmailTemplate[]> {
@@ -138,8 +183,20 @@ export async function fetchEmailTemplates(): Promise<EmailTemplate[]> {
 
 export async function updateEmailTemplate(
   id: string,
-  fields: Pick<EmailTemplate, 'name' | 'description' | 'subject' | 'html_body'>,
+  fields: { name: string; description: string | null; subject: string; html_body: string },
 ): Promise<void> {
   const { error } = await supabase.from('email_templates').update(fields).eq('id', id)
   if (error) throw error
+}
+
+export async function createEmailTemplate(
+  fields: Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>,
+): Promise<EmailTemplate> {
+  const { data, error } = await supabase
+    .from('email_templates')
+    .insert(fields)
+    .select()
+    .single()
+  if (error) throw error
+  return data as EmailTemplate
 }
