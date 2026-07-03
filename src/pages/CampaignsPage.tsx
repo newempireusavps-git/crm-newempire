@@ -264,13 +264,42 @@ function buildN8nWorkflow(campaign: Campaign, steps: CampaignStep[], templates: 
         },
         credentials: { gmailOAuth2: { id: 'YJWuOKBTU1vU7Ru3', name: 'Gmail account' } },
       })
+    } else if (step.channel === 'sms') {
+      nodes.push({
+        name: sendName,
+        type: 'n8n-nodes-base.twilio',
+        typeVersion: 1,
+        position: [1400, yOff],
+        parameters: {
+          operation: 'send',
+          from: '',
+          to: '={{ $json.phone }}',
+          message: tpl?.html_body ?? `Hi {{first_name}}, this is New Empire Remodeling!`,
+        },
+        credentials: { twilioApi: { id: 'YFl6lY0YQmrwtdHB', name: 'Twilio account' } },
+      })
+    } else if (step.channel === 'whatsapp') {
+      nodes.push({
+        name: sendName,
+        type: 'n8n-nodes-base.twilio',
+        typeVersion: 1,
+        position: [1400, yOff],
+        parameters: {
+          operation: 'send',
+          from: 'whatsapp:',
+          to: '={{ "whatsapp:" + $json.phone }}',
+          message: tpl?.html_body ?? `Hi {{first_name}}, this is New Empire Remodeling!`,
+        },
+        credentials: { twilioApi: { id: 'YFl6lY0YQmrwtdHB', name: 'Twilio account' } },
+      })
     } else {
+      // instagram / facebook — noOp placeholder until API is configured
       nodes.push({
         name: sendName,
         type: 'n8n-nodes-base.noOp',
         typeVersion: 1,
         position: [1400, yOff],
-        notes: `${CHANNEL_META[step.channel].label} — To: ={{ $json.phone }} | Body: ${tpl?.html_body.slice(0, 80) ?? 'Add template'}`,
+        notes: `${CHANNEL_META[step.channel].label} DM — connect ${step.channel} Messaging node here. Body: ${tpl?.html_body.slice(0, 80) ?? 'Add template'}`,
         parameters: {},
       })
     }
