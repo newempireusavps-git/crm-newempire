@@ -23,6 +23,36 @@ export async function updateLeadStatus(id: string, status: string): Promise<void
   if (error) throw error
 }
 
+export async function createLead(
+  fields: {
+    first_name: string
+    last_name: string
+    phone: string
+    email: string | null
+    channel: string
+    service_type: string
+    status: string
+    property_address: string | null
+    city: string | null
+    source: string
+  },
+): Promise<Lead> {
+  const { data, error } = await supabase
+    .from('leads')
+    .insert({
+      ...fields,
+      lead_score: 50,
+      priority: 'Warm',
+      ai_confidence_score: 0,
+      photos_submitted: false,
+      nurture_day: 0,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Lead
+}
+
 // ── Campaigns ────────────────────────────────────────────────────────────────
 
 export async function fetchCampaigns(): Promise<Campaign[]> {
