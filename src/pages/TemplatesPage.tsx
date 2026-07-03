@@ -1,58 +1,51 @@
 import { useState, useEffect, useRef } from 'react'
-import { Save, Eye, EyeOff, Mail, MessageSquare, AtSign, Share2, Phone,
-         ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2 } from 'lucide-react'
+import {
+  Save, Eye, EyeOff, Mail, MessageSquare, AtSign, Share2, Phone,
+  ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2,
+} from 'lucide-react'
 import type { EmailTemplate, CampaignChannel, Campaign, CampaignStep } from '@/types/lead'
 import {
   fetchEmailTemplates, updateEmailTemplate, createEmailTemplate,
   fetchCampaigns, fetchCampaignSteps, saveCampaignSteps, fetchCampaignLeadIds,
+  fetchLeads,
 } from '@/lib/supabase'
-import { useLeads } from '@/hooks/useLeads'
 import { cn } from '@/lib/utils'
 
 export const CHANNEL_META: Record<CampaignChannel, { label: string; icon: React.ReactNode; color: string }> = {
-  email:     { label: 'Email',     icon: <Mail size={14} />,          color: 'text-blue-400 border-blue-400/30 bg-blue-400/10' },
-  whatsapp:  { label: 'WhatsApp',  icon: <MessageSquare size={14} />, color: 'text-green-400 border-green-400/30 bg-green-400/10' },
-  sms:       { label: 'SMS',       icon: <Phone size={14} />,         color: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10' },
-  instagram: { label: 'Instagram (DM)', icon: <AtSign size={14} />,   color: 'text-pink-400 border-pink-400/30 bg-pink-400/10' },
-  facebook:  { label: 'Messenger', icon: <Share2 size={14} />,        color: 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10' },
+  email:     { label: 'Email',          icon: <Mail size={14} />,          color: 'text-blue-400 border-blue-400/30 bg-blue-400/10' },
+  whatsapp:  { label: 'WhatsApp',       icon: <MessageSquare size={14} />, color: 'text-green-400 border-green-400/30 bg-green-400/10' },
+  sms:       { label: 'SMS',            icon: <Phone size={14} />,         color: 'text-yellow-400 border-yellow-400/30 bg-yellow-400/10' },
+  instagram: { label: 'Instagram DM',   icon: <AtSign size={14} />,        color: 'text-pink-400 border-pink-400/30 bg-pink-400/10' },
+  facebook:  { label: 'Messenger',      icon: <Share2 size={14} />,        color: 'text-indigo-400 border-indigo-400/30 bg-indigo-400/10' },
 }
 
-// ─── Preview pane ─────────────────────────────────────────────────────────────
-function PreviewPane({ html, isHtml }: { html: string; isHtml: boolean }) {
-  const iframeRef = useRef<HTMLIFrameElement>(null)
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function PreviewPane({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null)
   useEffect(() => {
-    if (!isHtml || !iframeRef.current) return
-    const doc = iframeRef.current.contentDocument
+    const doc = ref.current?.contentDocument
     if (!doc) return
     doc.open(); doc.write(html); doc.close()
-  }, [html, isHtml])
-
-  if (!isHtml) {
-    return (
-      <pre className="w-full h-full p-4 bg-white text-gray-800 text-sm whitespace-pre-wrap rounded-lg overflow-auto font-sans leading-relaxed">
-        {html}
-      </pre>
-    )
-  }
-  return <iframe ref={iframeRef} className="w-full h-full rounded-lg border-0 bg-white" title="Preview" sandbox="allow-same-origin" />
+  }, [html])
+  return <iframe ref={ref} className="w-full h-full rounded-lg border-0 bg-white" title="Preview" sandbox="allow-same-origin" />
 }
 
-// ─── Template editor (inline) ─────────────────────────────────────────────────
+// ─── Inline editor ────────────────────────────────────────────────────────────
 function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
   const [name, setName]       = useState(template.name)
   const [desc, setDesc]       = useState(template.description ?? '')
-  const [subject, setSubject] = useState(template.subject)
-  const [body, setBody]       = useState(template.html_body)
+  const [subject, setSubject] = useState(template.subject ?? '')
+  const [body, setBody]       = useState(template.html_body ?? '')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
 
-  const isHtml = template.channel === 'email'
-  const dirty  = name !== template.name || desc !== (template.description ?? '') ||
-                 subject !== template.subject || body !== template.html_body
+  const isEmail = template.channel === 'email'
+  const dirty = name !== template.name || desc !== (template.description ?? '') ||
+                subject !== (template.subject ?? '') || body !== (template.html_body ?? '')
 
-  async function handleSave() {
+  async function save() {
     setSaving(true); setError('')
     try {
       await updateEmailTemplate(template.id, { name: name.trim(), description: desc.trim() || null, subject: subject.trim(), html_body: body })
@@ -76,44 +69,34 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
             className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
         </div>
       </div>
-
-      {isHtml && (
+      {isEmail && (
         <div>
           <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1">Assunto do Email</label>
           <input value={subject} onChange={(e) => setSubject(e.target.value)}
             className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
         </div>
       )}
-
       <p className="text-xs text-gray-500">
-        Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para inserir o nome do lead automaticamente.
+        Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para o nome do lead.
       </p>
-
       <div className="flex items-center justify-between">
-        <label className="text-xs text-gray-400 uppercase tracking-wide">{isHtml ? 'Código HTML' : 'Mensagem'}</label>
-        {isHtml && (
-          <button type="button" onClick={() => setPreview((p) => !p)}
+        <label className="text-xs text-gray-400 uppercase tracking-wide">{isEmail ? 'HTML' : 'Mensagem'}</label>
+        {isEmail && (
+          <button onClick={() => setPreview((p) => !p)} type="button"
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
-            {preview ? <EyeOff size={13} /> : <Eye size={13} />}
-            {preview ? 'Editar' : 'Visualizar'}
+            {preview ? <><EyeOff size={12} /> Editar</> : <><Eye size={12} /> Preview</>}
           </button>
         )}
       </div>
-
-      {preview && isHtml ? (
-        <div className="h-[400px] rounded-lg overflow-hidden border border-empire-border">
-          <PreviewPane html={body} isHtml={isHtml} />
-        </div>
-      ) : (
-        <textarea value={body} onChange={(e) => setBody(e.target.value)}
-          rows={isHtml ? 18 : 8} spellCheck={false}
-          className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y" />
-      )}
-
+      {preview && isEmail
+        ? <div className="h-96 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={body} /></div>
+        : <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={isEmail ? 16 : 7} spellCheck={false}
+            className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y" />
+      }
       {error && <p className="text-red-400 text-xs">{error}</p>}
       <div className="flex items-center justify-end gap-3">
         {saved && <span className="text-green-400 text-xs">Salvo ✓</span>}
-        <button onClick={() => void handleSave()} disabled={saving || !dirty}
+        <button onClick={() => void save()} disabled={saving || !dirty}
           className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors',
             dirty ? 'bg-empire-gold text-empire-dark hover:bg-empire-gold/90' : 'bg-empire-card text-gray-500 cursor-not-allowed border border-empire-border')}>
           {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -124,12 +107,9 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
   )
 }
 
-// ─── Template card ─────────────────────────────────────────────────────────────
 function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
   const [open, setOpen] = useState(false)
-  const ch   = (template.channel ?? 'email') as CampaignChannel
-  const meta = CHANNEL_META[ch]
-
+  const meta = CHANNEL_META[(template.channel ?? 'email') as CampaignChannel] ?? CHANNEL_META.email
   return (
     <div className="bg-empire-card border border-empire-border rounded-xl overflow-hidden">
       <button onClick={() => setOpen((o) => !o)}
@@ -139,10 +119,8 @@ function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved:
           <p className="text-white font-medium text-sm">{template.name}</p>
           {template.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{template.description}</p>}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className={cn('text-xs px-2 py-0.5 rounded-full border', meta.color)}>{meta.label}</span>
-          {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </div>
+        <span className={cn('text-xs px-2 py-0.5 rounded-full border shrink-0', meta.color)}>{meta.label}</span>
+        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
       </button>
       {open && (
         <div className="px-5 pb-5 border-t border-empire-border pt-4">
@@ -153,65 +131,75 @@ function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved:
   )
 }
 
-// ─── Create Template Modal ────────────────────────────────────────────────────
-function CreateTemplateModal({ onClose, onCreate }: {
+// ─── Create Modal ─────────────────────────────────────────────────────────────
+function CreateModal({ onClose, onCreate }: {
   onClose: () => void
   onCreate: (t: EmailTemplate) => void
 }) {
-  const { leads } = useLeads()
-  const [name, setName]               = useState('')
-  const [desc, setDesc]               = useState('')
-  const [channel, setChannel]         = useState<CampaignChannel>('email')
-  const [subject, setSubject]         = useState('')
-  const [body, setBody]               = useState('')
-  const [campaigns, setCampaigns]     = useState<Campaign[]>([])
-  const [campaignId, setCampaignId]   = useState('')
-  const [steps, setSteps]             = useState<CampaignStep[]>([])
-  const [stepOrder, setStepOrder]     = useState<number | null>(null)
+  // Form state
+  const [channel, setChannel]       = useState<CampaignChannel>('email')
+  const [name, setName]             = useState('')
+  const [desc, setDesc]             = useState('')
+  const [subject, setSubject]       = useState('')
+  const [body, setBody]             = useState('')
+  // Campaign assignment
+  const [campaigns, setCampaigns]   = useState<Campaign[]>([])
+  const [campaignId, setCampaignId] = useState('')
+  const [steps, setSteps]           = useState<CampaignStep[]>([])
+  const [stepOrder, setStepOrder]   = useState<number | ''>('')
+  // Leads preview
+  const [leads, setLeads]           = useState<{ id: string; first_name: string; last_name: string; status: string; email: string | null; phone: string }[]>([])
   const [enrolledIds, setEnrolledIds] = useState<Set<string>>(new Set())
-  const [leadSearch, setLeadSearch]   = useState('')
-  const [saving, setSaving]           = useState(false)
-  const [error, setError]             = useState('')
+  const [leadSearch, setLeadSearch] = useState('')
+  // UI
+  const [saving, setSaving]         = useState(false)
+  const [error, setError]           = useState('')
+  const [preview, setPreview]       = useState(false)
 
-  const isHtml = channel === 'email'
+  const isEmail = channel === 'email'
 
-  useEffect(() => { void fetchCampaigns().then(setCampaigns) }, [])
-
+  // Load campaigns on mount
   useEffect(() => {
-    if (!campaignId) { setSteps([]); setStepOrder(null); setEnrolledIds(new Set()); return }
-    void fetchCampaignSteps(campaignId).then(setSteps)
-    void fetchCampaignLeadIds(campaignId).then((ids) => setEnrolledIds(new Set(ids)))
+    fetchCampaigns().then(setCampaigns).catch(() => {})
+    fetchLeads().then(setLeads).catch(() => {})
+  }, [])
+
+  // Load steps + enrolled leads when campaign changes
+  useEffect(() => {
+    if (!campaignId) { setSteps([]); setStepOrder(''); setEnrolledIds(new Set()); return }
+    fetchCampaignSteps(campaignId).then(setSteps).catch(() => {})
+    fetchCampaignLeadIds(campaignId).then((ids) => setEnrolledIds(new Set(ids))).catch(() => {})
   }, [campaignId])
 
-  const filteredLeads = leads.filter((l) =>
-    `${l.first_name} ${l.last_name}`.toLowerCase().includes(leadSearch.toLowerCase()) ||
-    (l.email ?? '').toLowerCase().includes(leadSearch.toLowerCase())
+  const campaignLeads = leads.filter((l) =>
+    enrolledIds.has(l.id) &&
+    (`${l.first_name} ${l.last_name}`.toLowerCase().includes(leadSearch.toLowerCase()) ||
+     (l.email ?? '').toLowerCase().includes(leadSearch.toLowerCase()))
   )
-  const campaignLeads = filteredLeads.filter((l) => enrolledIds.has(l.id))
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) { setError('Nome obrigatório'); return }
+    if (!name.trim()) { setError('Nome é obrigatório'); return }
     setSaving(true); setError('')
     try {
       const created = await createEmailTemplate({
         name: name.trim(),
         description: desc.trim() || null,
         channel,
-        subject: isHtml ? (subject.trim() || name.trim()) : name.trim(),
+        subject: isEmail ? (subject.trim() || name.trim()) : name.trim(),
         html_body: body,
         template_key: `custom_${Date.now()}`,
         is_active: true,
       })
 
-      // If a step was selected, assign this template to it
-      if (campaignId && stepOrder !== null) {
-        const updated = steps.map((s) =>
-          s.step_order === stepOrder ? { ...s, template_id: created.id } : s
+      // Assign to step if chosen
+      if (campaignId && stepOrder !== '') {
+        const updated = steps.map((s) => s.step_order === Number(stepOrder) ? { ...s, template_id: created.id } : s)
+        await saveCampaignSteps(
+          campaignId,
+          updated.map(({ id: _id, created_at: _c, updated_at: _u, template: _t, ...rest }) => rest),
         )
-        await saveCampaignSteps(campaignId, updated.map(({ id: _id, created_at: _c, updated_at: _u, template: _t, ...rest }) => rest))
       }
-
       onCreate(created)
       onClose()
     } catch (e) {
@@ -221,135 +209,146 @@ function CreateTemplateModal({ onClose, onCreate }: {
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-empire-card border border-empire-border rounded-xl w-full max-w-2xl shadow-2xl max-h-[92vh] flex flex-col">
+      <div className="bg-empire-card border border-empire-border rounded-xl w-full max-w-2xl shadow-2xl flex flex-col" style={{ maxHeight: '92vh' }}>
         {/* Header */}
         <div className="px-6 py-4 border-b border-empire-border flex items-center justify-between shrink-0">
           <h2 className="text-white font-semibold">Novo Template</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors"><X size={18} /></button>
         </div>
 
-        <form onSubmit={(e) => void handleSubmit(e)} className="overflow-y-auto flex-1">
-          <div className="px-6 py-5 space-y-5">
+        <form onSubmit={(e) => void handleSubmit(e)} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
-            {/* Row 1: Canal + Nome */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Canal *</label>
-                <select value={channel} onChange={(e) => setChannel(e.target.value as CampaignChannel)}
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
-                  {(Object.keys(CHANNEL_META) as CampaignChannel[]).map((c) => (
-                    <option key={c} value={c}>{CHANNEL_META[c].label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Nome *</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Boas-vindas"
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
-              </div>
+          {/* Canal + Nome */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Canal *</label>
+              <select value={channel} onChange={(e) => { setChannel(e.target.value as CampaignChannel); setPreview(false) }}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
+                {(Object.keys(CHANNEL_META) as CampaignChannel[]).map((c) => (
+                  <option key={c} value={c}>{CHANNEL_META[c].label}</option>
+                ))}
+              </select>
             </div>
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Nome *</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: WhatsApp Dia 1"
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+            </div>
+          </div>
 
-            {/* Row 2: Campanha + Etapa */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Campanha</label>
-                <select value={campaignId} onChange={(e) => setCampaignId(e.target.value)}
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
-                  <option value="">— Selecionar campanha —</option>
-                  {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Etapa do workflow</label>
-                <select value={stepOrder ?? ''} onChange={(e) => setStepOrder(e.target.value ? Number(e.target.value) : null)}
-                  disabled={!campaignId || steps.length === 0}
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 disabled:opacity-40">
-                  <option value="">— Selecionar etapa —</option>
-                  {steps.map((s) => (
-                    <option key={s.step_order} value={s.step_order}>
-                      Etapa {s.step_order} — {CHANNEL_META[s.channel as CampaignChannel]?.label ?? s.channel}
-                    </option>
-                  ))}
-                </select>
-                {campaignId && steps.length === 0 && (
-                  <p className="text-xs text-yellow-500 mt-1">Esta campanha não tem etapas ainda. Adicione-as primeiro.</p>
+          {/* Campanha + Etapa */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Campanha (opcional)</label>
+              <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); setStepOrder('') }}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
+                <option value="">— Selecionar —</option>
+                {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Etapa no workflow</label>
+              <select value={stepOrder} onChange={(e) => setStepOrder(e.target.value === '' ? '' : Number(e.target.value))}
+                disabled={!campaignId}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 disabled:opacity-40">
+                <option value="">— Selecionar etapa —</option>
+                {steps.map((s) => (
+                  <option key={s.step_order} value={s.step_order}>
+                    Etapa {s.step_order} — {CHANNEL_META[s.channel as CampaignChannel]?.label ?? s.channel}
+                    {s.template_id ? ' (tem template)' : ''}
+                  </option>
+                ))}
+              </select>
+              {campaignId && steps.length === 0 && (
+                <p className="text-xs text-yellow-500 mt-1">Campanha sem etapas. Adicione na aba Campanhas.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Descrição */}
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Descrição</label>
+            <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Opcional"
+              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+          </div>
+
+          {/* Assunto — email only */}
+          {isEmail && (
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Assunto do Email</label>
+              <input value={subject} onChange={(e) => setSubject(e.target.value)}
+                placeholder="Ex: Transforme sua cozinha — New Empire Remodeling"
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+            </div>
+          )}
+
+          {/* Conteúdo */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-400 uppercase tracking-wide">{isEmail ? 'HTML do Email' : 'Texto da Mensagem'}</label>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">
+                  <code className="text-empire-gold">{'{{first_name}}'}</code> → nome do lead
+                </span>
+                {isEmail && (
+                  <button type="button" onClick={() => setPreview((p) => !p)}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors">
+                    {preview ? <><EyeOff size={12} /> Editar</> : <><Eye size={12} /> Preview</>}
+                  </button>
                 )}
               </div>
             </div>
+            {preview && isEmail
+              ? <div className="h-64 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={body} /></div>
+              : <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={isEmail ? 10 : 5} spellCheck={false}
+                  placeholder={isEmail
+                    ? '<p>Olá {{first_name}},</p>\n<p>Aqui é a New Empire Remodeling...</p>'
+                    : 'Olá {{first_name}}! Aqui é a New Empire 👋'}
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y placeholder:text-gray-600" />
+            }
+          </div>
 
-            {/* Descrição */}
+          {/* Leads da campanha selecionada */}
+          {campaignId && enrolledIds.size > 0 && (
             <div>
-              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Descrição</label>
-              <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Opcional"
-                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
-            </div>
-
-            {/* Assunto (email only) */}
-            {isHtml && (
-              <div>
-                <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Assunto do Email</label>
-                <input value={subject} onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Ex: Sua cozinha transformada — New Empire Remodeling"
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
-              </div>
-            )}
-
-            {/* Conteúdo */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs text-gray-400 uppercase tracking-wide">{isHtml ? 'Conteúdo HTML' : 'Mensagem'}</label>
-                <span className="text-xs text-gray-500">
-                  Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para o nome do lead
-                </span>
-              </div>
-              <textarea value={body} onChange={(e) => setBody(e.target.value)}
-                rows={isHtml ? 12 : 5} spellCheck={false}
-                placeholder={isHtml ? '<p>Olá {{first_name}},</p>' : 'Olá {{first_name}}, tudo bem? 👋'}
-                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y placeholder:text-gray-600" />
-            </div>
-
-            {/* Leads segmentados da campanha */}
-            {campaignId && enrolledIds.size > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Users size={14} className="text-gray-400" />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Users size={13} className="text-gray-400" />
                   <label className="text-xs text-gray-400 uppercase tracking-wide">
                     Leads nesta campanha ({enrolledIds.size})
                   </label>
                 </div>
                 <input value={leadSearch} onChange={(e) => setLeadSearch(e.target.value)}
-                  placeholder="Filtrar leads…"
-                  className="w-full bg-empire-navy border border-empire-border text-white text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-empire-gold/50 placeholder:text-gray-600 mb-2" />
-                <div className="max-h-40 overflow-y-auto space-y-1 pr-1">
-                  {campaignLeads.map((lead) => (
-                    <div key={lead.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-empire-navy border border-empire-border">
-                      <CheckCircle2 size={13} className="text-empire-gold shrink-0" />
-                      <span className="text-sm text-white">{lead.first_name} {lead.last_name}</span>
-                      <span className="text-xs text-gray-500 ml-auto">{lead.status}</span>
-                    </div>
-                  ))}
-                  {campaignLeads.length === 0 && (
-                    <p className="text-xs text-gray-600 text-center py-2">Nenhum lead encontrado</p>
-                  )}
-                </div>
+                  placeholder="Filtrar…"
+                  className="bg-empire-navy border border-empire-border text-white text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-empire-gold/50 placeholder:text-gray-600 w-32" />
               </div>
-            )}
+              <div className="max-h-36 overflow-y-auto space-y-1 pr-1">
+                {campaignLeads.map((l) => (
+                  <div key={l.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-empire-navy border border-empire-border">
+                    <CheckCircle2 size={12} className="text-empire-gold shrink-0" />
+                    <span className="text-sm text-white flex-1 truncate">{l.first_name} {l.last_name}</span>
+                    <span className="text-xs text-gray-500">{l.status}</span>
+                  </div>
+                ))}
+                {campaignLeads.length === 0 && <p className="text-xs text-gray-600 text-center py-2">Nenhum lead encontrado</p>}
+              </div>
+            </div>
+          )}
 
-            {error && <p className="text-red-400 text-xs">{error}</p>}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-empire-border flex gap-3 shrink-0 sticky bottom-0 bg-empire-card">
-            <button type="button" onClick={onClose}
-              className="flex-1 py-2 rounded-lg border border-empire-border text-gray-400 text-sm hover:text-white transition-colors">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="flex-1 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 transition-colors disabled:opacity-50">
-              {saving ? 'Criando…' : stepOrder !== null ? 'Criar e Atribuir à Etapa' : 'Criar Template'}
-            </button>
-          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
         </form>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-empire-border flex gap-3 shrink-0">
+          <button type="button" onClick={onClose}
+            className="flex-1 py-2 rounded-lg border border-empire-border text-gray-400 text-sm hover:text-white transition-colors">
+            Cancelar
+          </button>
+          <button onClick={(e) => void handleSubmit(e as unknown as React.FormEvent)} disabled={saving}
+            className="flex-1 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 disabled:opacity-50 transition-colors">
+            {saving ? 'Criando…' : stepOrder !== '' ? 'Criar e Atribuir à Etapa' : 'Criar Template'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -371,15 +370,16 @@ export function TemplatesPage() {
   }, [])
 
   const visible = filter === 'all' ? templates : templates.filter((t) => t.channel === filter)
+  const channels = (Object.keys(CHANNEL_META) as CampaignChannel[]).filter((c) => templates.some((t) => t.channel === c))
 
   return (
     <>
       <div className="space-y-6 max-w-4xl">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white">Templates de Mensagens</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Edite os textos enviados nos fluxos sem precisar acessar o n8n.
+              Edite os textos dos fluxos de nutrição sem precisar acessar o n8n.
             </p>
           </div>
           <button onClick={() => setShowCreate(true)}
@@ -388,7 +388,7 @@ export function TemplatesPage() {
           </button>
         </div>
 
-        {/* Filter chips */}
+        {/* Channel filter chips */}
         {templates.length > 0 && (
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setFilter('all')}
@@ -396,24 +396,21 @@ export function TemplatesPage() {
                 filter === 'all' ? 'bg-empire-gold text-empire-dark border-empire-gold' : 'border-empire-border text-gray-400 hover:text-white')}>
               Todos ({templates.length})
             </button>
-            {(Object.keys(CHANNEL_META) as CampaignChannel[])
-              .filter((c) => templates.some((t) => t.channel === c))
-              .map((c) => (
-                <button key={c} onClick={() => setFilter(c)}
-                  className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-                    filter === c
-                      ? cn(CHANNEL_META[c].color, 'border-current')
-                      : 'border-empire-border text-gray-400 hover:text-white')}>
-                  {CHANNEL_META[c].icon}{CHANNEL_META[c].label}
-                  <span className="opacity-60">({templates.filter((t) => t.channel === c).length})</span>
-                </button>
-              ))}
+            {channels.map((c) => (
+              <button key={c} onClick={() => setFilter(c)}
+                className={cn('flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                  filter === c ? CHANNEL_META[c].color : 'border-empire-border text-gray-400 hover:text-white')}>
+                {CHANNEL_META[c].icon}
+                {CHANNEL_META[c].label}
+                <span className="opacity-60">({templates.filter((t) => t.channel === c).length})</span>
+              </button>
+            ))}
           </div>
         )}
 
         {loading ? (
           <div className="flex items-center gap-2 text-gray-400 text-sm py-12">
-            <Loader2 size={16} className="animate-spin" /> Carregando templates…
+            <Loader2 size={16} className="animate-spin" /> Carregando…
           </div>
         ) : error ? (
           <p className="text-red-400 text-sm">{error}</p>
@@ -432,19 +429,15 @@ export function TemplatesPage() {
         ) : (
           <div className="space-y-3">
             {visible.map((t) => (
-              <TemplateCard key={t.id} template={t} onSaved={(updated) =>
-                setTemplates((prev) => prev.map((x) => x.id === updated.id ? updated : x))
-              } />
+              <TemplateCard key={t.id} template={t}
+                onSaved={(u) => setTemplates((prev) => prev.map((x) => x.id === u.id ? u : x))} />
             ))}
           </div>
         )}
       </div>
 
       {showCreate && (
-        <CreateTemplateModal
-          onClose={() => setShowCreate(false)}
-          onCreate={(t) => setTemplates((prev) => [...prev, t])}
-        />
+        <CreateModal onClose={() => setShowCreate(false)} onCreate={(t) => setTemplates((prev) => [...prev, t])} />
       )}
     </>
   )
