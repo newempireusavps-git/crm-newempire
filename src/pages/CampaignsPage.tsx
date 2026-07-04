@@ -25,9 +25,10 @@ export const CHANNEL_META: Record<CampaignChannel, { label: string; icon: React.
 }
 
 const N8N_BASE = '/n8n-api'
-const SUPABASE_CRED = { id: 'RejDPLBPlbb3ulIn', name: 'Supabase account' }
-const GMAIL_CRED    = { id: 'YJWuOKBTU1vU7Ru3', name: 'Gmail account' }
-const TWILIO_CRED   = { id: 'YFl6lY0YQmrwtdHB', name: 'Twilio account' }
+const SUPABASE_CRED  = { id: 'RejDPLBPlbb3ulIn', name: 'Supabase account' }
+const GMAIL_CRED     = { id: 'YJWuOKBTU1vU7Ru3', name: 'Gmail account' }
+const TWILIO_CRED    = { id: 'YFl6lY0YQmrwtdHB', name: 'Twilio account' }
+const FACEBOOK_CRED  = { id: 'rCZTbXlD7nYy9GWQ', name: 'Facebook Graph account' }
 
 // ─── n8n workflow builder ─────────────────────────────────────────────────────
 function buildN8nWorkflow(campaign: Campaign, steps: CampaignStep[], templates: EmailTemplate[]) {
@@ -87,17 +88,40 @@ function buildN8nWorkflow(campaign: Campaign, steps: CampaignStep[], templates: 
         nodes.push({ name: send, type: 'n8n-nodes-base.twilio', typeVersion: 1, position: [1400, y],
           parameters: { operation: 'send', from: 'whatsapp:', to: '={{ "whatsapp:" + $json.phone }}', message: plainBody },
           credentials: { twilioApi: TWILIO_CRED } })
-      } else {
-        // Instagram DM / Messenger — HTTP Request placeholder (configure endpoint in n8n)
-        nodes.push({ name: send, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [1400, y],
+      } else if (step.channel === 'facebook') {
+        // Messenger via Facebook Graph API — POST /me/messages
+        nodes.push({ name: send, type: 'n8n-nodes-base.facebookGraphApi', typeVersion: 1, position: [1400, y],
           parameters: {
-            method: 'POST', url: 'https://CONFIGURE_YOUR_API_ENDPOINT_HERE',
-            sendBody: true, bodyParameters: { parameters: [
-              { name: 'recipient_id', value: '={{ $json.instagram_id ?? $json.facebook_id ?? "" }}' },
-              { name: 'message', value: plainBody },
-            ]},
-            options: {},
-          }})
+            httpRequestMethod: 'POST',
+            graphApiVersion: 'v21.0',
+            node: 'me',
+            edge: 'messages',
+            options: {
+              queryParameters: { parameter: [
+                { name: 'recipient', value: `={{ JSON.stringify({id: $json.facebook_psid ?? $json.facebook_id ?? ""}) }}` },
+                { name: 'message',   value: `={{ JSON.stringify({text: \`${plainBody.replace(/`/g, "'")}\`}) }}` },
+                { name: 'messaging_type', value: 'MESSAGE_TAG' },
+                { name: 'tag', value: 'CONFIRMED_EVENT_UPDATE' },
+              ]},
+            },
+          },
+          credentials: { facebookGraphApi: FACEBOOK_CRED } })
+      } else {
+        // Instagram DM via Facebook Graph API — POST /{ig-user-id}/messages
+        nodes.push({ name: send, type: 'n8n-nodes-base.facebookGraphApi', typeVersion: 1, position: [1400, y],
+          parameters: {
+            httpRequestMethod: 'POST',
+            graphApiVersion: 'v21.0',
+            node: '={{ $json.instagram_user_id ?? "me" }}',
+            edge: 'messages',
+            options: {
+              queryParameters: { parameter: [
+                { name: 'recipient', value: `={{ JSON.stringify({id: $json.instagram_scoped_id ?? $json.instagram_id ?? ""}) }}` },
+                { name: 'message',   value: `={{ JSON.stringify({text: \`${plainBody.replace(/`/g, "'")}\`}) }}` },
+              ]},
+            },
+          },
+          credentials: { facebookGraphApi: FACEBOOK_CRED } })
       }
 
       const next = steps[i + 1]
