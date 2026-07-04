@@ -82,11 +82,11 @@ function buildN8nWorkflow(campaign: Campaign, steps: CampaignStep[], templates: 
           credentials: { gmailOAuth2: GMAIL_CRED } })
       } else if (step.channel === 'sms') {
         nodes.push({ name: send, type: 'n8n-nodes-base.twilio', typeVersion: 1, position: [1400, y],
-          parameters: { operation: 'send', from: '', to: '={{ $json.phone }}', message: plainBody },
+          parameters: { operation: 'send', from: '+18148853589', to: '={{ $json.phone }}', message: plainBody },
           credentials: { twilioApi: TWILIO_CRED } })
       } else if (step.channel === 'whatsapp') {
         nodes.push({ name: send, type: 'n8n-nodes-base.twilio', typeVersion: 1, position: [1400, y],
-          parameters: { operation: 'send', from: 'whatsapp:', to: '={{ "whatsapp:" + $json.phone }}', message: plainBody },
+          parameters: { operation: 'send', from: 'whatsapp:+18148853589', to: '={{ "whatsapp:" + $json.phone }}', message: plainBody },
           credentials: { twilioApi: TWILIO_CRED } })
       } else if (step.channel === 'facebook') {
         // Messenger via Facebook Graph API — POST /me/messages
