@@ -171,12 +171,16 @@ export async function fetchCampaignSteps(campaignId: string): Promise<CampaignSt
 
 export async function saveCampaignSteps(
   campaignId: string,
-  steps: Omit<CampaignStep, 'id' | 'created_at' | 'updated_at' | 'template'>[],
+  steps: Partial<CampaignStep>[],
 ): Promise<void> {
   await supabase.from('campaign_steps').delete().eq('campaign_id', campaignId)
   if (steps.length === 0) return
   const { error } = await supabase.from('campaign_steps').insert(
-    steps.map((s) => ({ ...s, campaign_id: campaignId })),
+    // Strip auto-generated fields so Supabase generates fresh UUIDs for new steps
+    steps.map(({ id: _id, created_at: _ca, updated_at: _ua, template: _tpl, ...rest }) => ({
+      ...rest,
+      campaign_id: campaignId,
+    })),
   )
   if (error) throw error
 }
