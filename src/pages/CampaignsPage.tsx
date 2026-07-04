@@ -68,24 +68,36 @@ function buildN8nWorkflow(campaign: Campaign, steps: CampaignStep[], templates: 
       const send = `Send ${step.step_order}`
       const upd  = `Update ${step.step_order}`
       const y    = i * 200
+      // Strip HTML tags for plain-text channels
+      const plainBody = tpl?.html_body
+        ? tpl.html_body.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+        : `Hi {{first_name}}, this is New Empire Remodeling. Step ${step.step_order}.`
 
       if (step.channel === 'email') {
         nodes.push({ name: send, type: 'n8n-nodes-base.gmail', typeVersion: 2.1, position: [1400, y],
           parameters: { operation: 'send', sendTo: '={{ $json.lead_email }}',
             subject: tpl?.subject ?? `New Empire — Step ${step.step_order}`,
-            emailType: 'html', message: tpl?.html_body ?? '<p>Hello!</p>', options: {} },
+            emailType: 'html', message: tpl?.html_body ?? '<p>Hi {{first_name}},<br/>This is New Empire Remodeling.</p>', options: {} },
           credentials: { gmailOAuth2: GMAIL_CRED } })
       } else if (step.channel === 'sms') {
         nodes.push({ name: send, type: 'n8n-nodes-base.twilio', typeVersion: 1, position: [1400, y],
-          parameters: { operation: 'send', from: '', to: '={{ $json.phone }}', message: tpl?.html_body ?? 'Hi from New Empire!' },
+          parameters: { operation: 'send', from: '', to: '={{ $json.phone }}', message: plainBody },
           credentials: { twilioApi: TWILIO_CRED } })
       } else if (step.channel === 'whatsapp') {
         nodes.push({ name: send, type: 'n8n-nodes-base.twilio', typeVersion: 1, position: [1400, y],
-          parameters: { operation: 'send', from: 'whatsapp:', to: '={{ "whatsapp:" + $json.phone }}', message: tpl?.html_body ?? 'Hi from New Empire!' },
+          parameters: { operation: 'send', from: 'whatsapp:', to: '={{ "whatsapp:" + $json.phone }}', message: plainBody },
           credentials: { twilioApi: TWILIO_CRED } })
       } else {
-        nodes.push({ name: send, type: 'n8n-nodes-base.noOp', typeVersion: 1, position: [1400, y],
-          notes: `${CHANNEL_META[step.channel].label} — connect messaging node here.`, parameters: {} })
+        // Instagram DM / Messenger — HTTP Request placeholder (configure endpoint in n8n)
+        nodes.push({ name: send, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.2, position: [1400, y],
+          parameters: {
+            method: 'POST', url: 'https://CONFIGURE_YOUR_API_ENDPOINT_HERE',
+            sendBody: true, bodyParameters: { parameters: [
+              { name: 'recipient_id', value: '={{ $json.instagram_id ?? $json.facebook_id ?? "" }}' },
+              { name: 'message', value: plainBody },
+            ]},
+            options: {},
+          }})
       }
 
       const next = steps[i + 1]
@@ -327,7 +339,11 @@ function CampaignDetail({ campaign: init, onBack }: { campaign: Campaign; onBack
       try {
         const { id, url } = await syncToN8n(campaign, canonical, templates)
         setCampaign((p) => ({ ...p, n8n_workflow_id: id, n8n_workflow_url: url }))
-      } catch { /* ignore n8n errors silently if key not set */ }
+      } catch (syncErr) {
+        // Show sync warning but don't block save
+        const msg = syncErr instanceof Error ? syncErr.message : 'Erro ao sincronizar com n8n'
+        setError(`Salvo ✓ — Aviso n8n: ${msg}`)
+      }
       setEditing(false)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)

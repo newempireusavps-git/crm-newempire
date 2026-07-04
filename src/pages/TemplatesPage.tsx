@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Save, Eye, EyeOff, Mail, MessageSquare, AtSign, Share2, Phone,
-  ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2,
+  ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2, Trash2,
 } from 'lucide-react'
 import type { EmailTemplate, CampaignChannel, Campaign, CampaignStep } from '@/types/lead'
 import {
-  fetchEmailTemplates, updateEmailTemplate, createEmailTemplate,
+  fetchEmailTemplates, updateEmailTemplate, createEmailTemplate, deleteEmailTemplate,
   fetchCampaigns, fetchCampaignSteps, saveCampaignSteps, fetchCampaignLeadIds,
   fetchLeads,
 } from '@/lib/supabase'
@@ -107,21 +107,52 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
   )
 }
 
-function TemplateCard({ template, onSaved }: { template: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
-  const [open, setOpen] = useState(false)
+function TemplateCard({ template, onSaved, onDeleted }: {
+  template: EmailTemplate
+  onSaved: (t: EmailTemplate) => void
+  onDeleted: (id: string) => void
+}) {
+  const [open, setOpen]       = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const meta = CHANNEL_META[(template.channel ?? 'email') as CampaignChannel] ?? CHANNEL_META.email
+
+  async function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm) { setConfirm(true); return }
+    setDeleting(true)
+    try { await deleteEmailTemplate(template.id); onDeleted(template.id) }
+    catch { setDeleting(false); setConfirm(false) }
+  }
+
   return (
     <div className="bg-empire-card border border-empire-border rounded-xl overflow-hidden">
-      <button onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-empire-navy/40 transition-colors">
-        <span className="text-empire-gold">{meta.icon}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-white font-medium text-sm">{template.name}</p>
-          {template.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{template.description}</p>}
-        </div>
-        <span className={cn('text-xs px-2 py-0.5 rounded-full border shrink-0', meta.color)}>{meta.label}</span>
-        {open ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-      </button>
+      <div className="flex items-center gap-3 px-5 py-4 hover:bg-empire-navy/40 transition-colors">
+        <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-3 flex-1 text-left min-w-0">
+          <span className="text-empire-gold shrink-0">{meta.icon}</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-medium text-sm">{template.name}</p>
+            {template.description && <p className="text-gray-500 text-xs mt-0.5 truncate">{template.description}</p>}
+          </div>
+          <span className={cn('text-xs px-2 py-0.5 rounded-full border shrink-0', meta.color)}>{meta.label}</span>
+          {open ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
+        </button>
+        <button onClick={(e) => void handleDelete(e)} disabled={deleting}
+          className={cn(
+            'shrink-0 ml-2 p-1.5 rounded-lg border text-xs font-medium transition-colors',
+            confirm
+              ? 'border-red-500/60 text-red-400 bg-red-500/10 hover:bg-red-500/20'
+              : 'border-empire-border text-gray-600 hover:text-red-400 hover:border-red-500/40',
+          )}>
+          {deleting ? <Loader2 size={13} className="animate-spin" /> : confirm ? <><Trash2 size={13} className="inline" /> Confirmar</> : <Trash2 size={13} />}
+        </button>
+        {confirm && !deleting && (
+          <button onClick={(e) => { e.stopPropagation(); setConfirm(false) }}
+            className="shrink-0 p-1.5 text-gray-600 hover:text-white transition-colors">
+            <X size={13} />
+          </button>
+        )}
+      </div>
       {open && (
         <div className="px-5 pb-5 border-t border-empire-border pt-4">
           <TemplateEditor template={template} onSaved={onSaved} />
@@ -430,7 +461,8 @@ export function TemplatesPage() {
           <div className="space-y-3">
             {visible.map((t) => (
               <TemplateCard key={t.id} template={t}
-                onSaved={(u) => setTemplates((prev) => prev.map((x) => x.id === u.id ? u : x))} />
+                onSaved={(u) => setTemplates((prev) => prev.map((x) => x.id === u.id ? u : x))}
+                onDeleted={(id) => setTemplates((prev) => prev.filter((x) => x.id !== id))} />
             ))}
           </div>
         )}

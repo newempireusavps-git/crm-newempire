@@ -219,6 +219,11 @@ export async function updateEmailTemplate(
   if (error) throw error
 }
 
+export async function deleteEmailTemplate(id: string): Promise<void> {
+  const { error } = await supabase.from('email_templates').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createEmailTemplate(
   fields: Omit<EmailTemplate, 'id' | 'created_at' | 'updated_at'>,
 ): Promise<EmailTemplate> {
