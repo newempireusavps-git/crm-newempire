@@ -37,6 +37,8 @@ export interface Lead {
   ai_analysis_summary: string | null
   session_id: string | null
   channel: string
+  facebook_psid: string | null
+  instagram_scoped_id: string | null
 }
 
 export interface Campaign {

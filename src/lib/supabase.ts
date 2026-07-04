@@ -35,6 +35,8 @@ export async function createLead(
     property_address: string | null
     city: string | null
     source: string
+    facebook_psid?: string | null
+    instagram_scoped_id?: string | null
   },
 ): Promise<Lead> {
   const { data, error } = await supabase

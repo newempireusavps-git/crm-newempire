@@ -48,10 +48,12 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [channel, setChannel]       = useState('manual')
   const [serviceType, setServiceType] = useState('Cabinet Painting')
   const [status, setStatus]         = useState('New Lead')
-  const [address, setAddress]       = useState('')
-  const [city, setCity]             = useState('')
-  const [saving, setSaving]         = useState(false)
-  const [error, setError]           = useState('')
+  const [address, setAddress]             = useState('')
+  const [city, setCity]                   = useState('')
+  const [facebookPsid, setFacebookPsid]   = useState('')
+  const [instagramId, setInstagramId]     = useState('')
+  const [saving, setSaving]               = useState(false)
+  const [error, setError]                 = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -60,16 +62,18 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     setSaving(true); setError('')
     try {
       const lead = await createLead({
-        first_name:       firstName.trim(),
-        last_name:        lastName.trim(),
-        phone:            phone.trim(),
-        email:            email.trim() || null,
+        first_name:           firstName.trim(),
+        last_name:            lastName.trim(),
+        phone:                phone.trim(),
+        email:                email.trim() || null,
         channel,
-        service_type:     serviceType,
+        service_type:         serviceType,
         status,
-        property_address: address.trim() || null,
-        city:             city.trim() || null,
-        source:           'Manual',
+        property_address:     address.trim() || null,
+        city:                 city.trim() || null,
+        source:               'Manual',
+        facebook_psid:        facebookPsid.trim() || null,
+        instagram_scoped_id:  instagramId.trim() || null,
       })
       onCreated(lead)
       onClose()
@@ -162,6 +166,25 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               <label className={labelClass}>Cidade</label>
               <input value={city} onChange={(e) => setCity(e.target.value)}
                 placeholder="Miami" className={inputClass} />
+            </div>
+          </div>
+
+          {/* IDs de redes sociais */}
+          <div className="border-t border-empire-border pt-3">
+            <p className="text-xs text-gray-500 mb-3">IDs de redes sociais <span className="text-gray-600">(opcionais — necessários para envio via Messenger e Instagram DM)</span></p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Facebook PSID</label>
+                <input value={facebookPsid} onChange={(e) => setFacebookPsid(e.target.value)}
+                  placeholder="Ex: 1234567890123456" className={inputClass} />
+                <p className="text-xs text-gray-600 mt-1">Page-Scoped ID do Messenger</p>
+              </div>
+              <div>
+                <label className={labelClass}>Instagram Scoped ID</label>
+                <input value={instagramId} onChange={(e) => setInstagramId(e.target.value)}
+                  placeholder="Ex: 9876543210987654" className={inputClass} />
+                <p className="text-xs text-gray-600 mt-1">ID do usuário no Instagram</p>
+              </div>
             </div>
           </div>
 
