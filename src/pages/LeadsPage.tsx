@@ -91,7 +91,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
         <form onSubmit={(e) => void handleSubmit(e)} className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
           {/* Nome */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Nome *</label>
               <input value={firstName} onChange={(e) => setFirstName(e.target.value)}
@@ -105,7 +105,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
 
           {/* Contato */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Telefone *</label>
               <input value={phone} onChange={(e) => setPhone(e.target.value)}
@@ -119,7 +119,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
 
           {/* Canal + Status */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Canal de entrada</label>
               <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputClass}>
@@ -152,7 +152,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
 
           {/* Endereço */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Endereço</label>
               <input value={address} onChange={(e) => setAddress(e.target.value)}

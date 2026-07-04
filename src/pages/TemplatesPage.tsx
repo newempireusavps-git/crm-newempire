@@ -219,7 +219,7 @@ function CreateModal({ onClose, onCreate }: {
         <form onSubmit={(e) => void handleSubmit(e)} className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
           {/* Canal + Nome */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Canal *</label>
               <select value={channel} onChange={(e) => { setChannel(e.target.value as CampaignChannel); setPreview(false) }}
@@ -237,7 +237,7 @@ function CreateModal({ onClose, onCreate }: {
           </div>
 
           {/* Campanha + Etapa */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Campanha (opcional)</label>
               <select value={campaignId} onChange={(e) => { setCampaignId(e.target.value); setStepOrder('') }}

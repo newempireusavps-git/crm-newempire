@@ -33,13 +33,13 @@ function AppInner() {
   }, [])
 
   return (
-    <div className="flex min-h-screen bg-empire-dark">
+    <div className="flex flex-col md:flex-row min-h-screen bg-empire-dark">
       <Sidebar activePage={activePage} onNavigate={setActivePage} />
 
       <div className="flex-1 flex flex-col min-w-0">
         {activePage === 'dashboard' && <GlobalFilters leads={rawLeads} />}
 
-        <main className="flex-1 p-6 overflow-auto">
+        <main className="flex-1 p-3 md:p-6 overflow-auto">
           {activePage === 'dashboard'   && <DashboardPage leads={leads} loading={loading} onRefresh={handleRefresh} />}
           {activePage === 'pipeline'    && <PipelinePage leads={leads} onLeadsChange={handleLeadsChange} />}
           {activePage === 'insights'    && <InsightsPage leads={leads} />}
