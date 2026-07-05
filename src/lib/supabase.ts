@@ -23,6 +23,36 @@ export async function updateLeadStatus(id: string, status: string): Promise<void
   if (error) throw error
 }
 
+export async function updateLead(
+  id: string,
+  fields: Partial<{
+    first_name: string
+    last_name: string
+    phone: string
+    email: string | null
+    channel: string
+    service_type: string
+    status: string
+    priority: string
+    property_address: string | null
+    city: string | null
+    zip_code: string | null
+    timeline: string | null
+    estimated_project_value: number | null
+    facebook_psid: string | null
+    instagram_scoped_id: string | null
+  }>,
+): Promise<Lead> {
+  const { data, error } = await supabase.from('leads').update(fields).eq('id', id).select().single()
+  if (error) throw error
+  return data as Lead
+}
+
+export async function deleteLead(id: string): Promise<void> {
+  const { error } = await supabase.from('leads').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createLead(
   fields: {
     first_name: string

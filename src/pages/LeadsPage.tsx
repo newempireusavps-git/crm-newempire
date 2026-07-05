@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Download, Upload, ChevronLeft, ChevronRight, Search, Plus, X, Loader2 } from 'lucide-react'
 import type { Lead } from '@/types/lead'
-import { PIPELINE_STAGES } from '@/types/lead'
+import { PIPELINE_STAGES, SERVICE_TYPES, VALID_SOURCES, VALID_CHANNELS } from '@/types/lead'
 import { LeadModal } from '@/components/Pipeline/LeadModal'
 import { formatDate } from '@/lib/utils'
 import { createLead } from '@/lib/supabase'
@@ -11,6 +11,7 @@ interface LeadsPageProps {
   leads: Lead[]
   loading: boolean
   onLeadAdded?: (lead: Lead) => void
+  onLeadsChange?: (leads: Lead[]) => void
 }
 
 const CHANNEL_COLORS: Record<string, string> = {
@@ -21,30 +22,6 @@ const CHANNEL_COLORS: Record<string, string> = {
   sms:       'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
   manual:    'text-gray-400 bg-gray-400/10 border-gray-400/30',
 }
-
-// Must match the leads_service_type_check constraint in Supabase
-const SERVICE_TYPES = [
-  'Cabinet Painting',
-  'Cabinet Refacing',
-  'Cabinet Replacement',
-  'Kitchen Remodeling',
-  'Bathroom Remodeling',
-  'Flooring',
-  'Interior Painting',
-  'Exterior Painting',
-  'Drywall Repair',
-  'Home Additions',
-  'New Construction',
-  'Commercial Remodeling',
-  'Design-Build',
-  'General Contracting',
-  'Unknown',
-]
-
-// Must match the leads_source_check constraint in Supabase
-const VALID_SOURCES = ['Website', 'Facebook', 'Instagram', 'Google', 'WhatsApp', 'Referral', 'Other']
-
-const VALID_CHANNELS = ['manual', 'whatsapp', 'instagram', 'facebook', 'chat', 'sms', 'referral', 'website']
 
 function parseCSV(text: string): string[][] {
   const rows: string[][] = []
@@ -251,7 +228,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 const PAGE_SIZE = 20
 
-export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
+export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsPageProps) {
   const [search, setSearch]               = useState('')
   const [filterStatus, setFilterStatus]   = useState('todos')
   const [filterChannel, setFilterChannel] = useState('todos')
@@ -523,7 +500,18 @@ export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
         </div>
       </div>
 
-      <LeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+      <LeadModal
+        lead={selectedLead}
+        onClose={() => setSelectedLead(null)}
+        onUpdated={(updated) => {
+          onLeadsChange?.(leads.map((l) => (l.id === updated.id ? updated : l)))
+          setSelectedLead(null)
+        }}
+        onDeleted={(id) => {
+          onLeadsChange?.(leads.filter((l) => l.id !== id))
+          setSelectedLead(null)
+        }}
+      />
 
       {showNew && (
         <NewLeadModal

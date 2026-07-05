@@ -10,6 +10,33 @@ export const PIPELINE_STAGES = [
 
 export type LeadStatus = (typeof PIPELINE_STAGES)[number]['status']
 
+// Must match the leads_service_type_check constraint in Supabase
+export const SERVICE_TYPES = [
+  'Cabinet Painting',
+  'Cabinet Refacing',
+  'Cabinet Replacement',
+  'Kitchen Remodeling',
+  'Bathroom Remodeling',
+  'Flooring',
+  'Interior Painting',
+  'Exterior Painting',
+  'Drywall Repair',
+  'Home Additions',
+  'New Construction',
+  'Commercial Remodeling',
+  'Design-Build',
+  'General Contracting',
+  'Unknown',
+]
+
+// Must match the leads_source_check constraint in Supabase
+export const VALID_SOURCES = ['Website', 'Facebook', 'Instagram', 'Google', 'WhatsApp', 'Referral', 'Other']
+
+export const VALID_CHANNELS = ['manual', 'whatsapp', 'instagram', 'facebook', 'chat', 'sms', 'referral', 'website']
+
+// Must match the leads_priority_check constraint in Supabase
+export const PRIORITY_LEVELS = ['Cold', 'Warm', 'Hot', 'Very Hot']
+
 export interface Lead {
   id: string
   created_at: string

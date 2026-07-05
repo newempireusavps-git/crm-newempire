@@ -101,7 +101,18 @@ export function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
         </DragOverlay>
       </DndContext>
 
-      <LeadModal lead={selectedLead} onClose={() => setSelectedLead(null)} />
+      <LeadModal
+        lead={selectedLead}
+        onClose={() => setSelectedLead(null)}
+        onUpdated={(updated) => {
+          onLeadsChange(leads.map((l) => (l.id === updated.id ? updated : l)))
+          setSelectedLead(null)
+        }}
+        onDeleted={(id) => {
+          onLeadsChange(leads.filter((l) => l.id !== id))
+          setSelectedLead(null)
+        }}
+      />
     </>
   )
 }

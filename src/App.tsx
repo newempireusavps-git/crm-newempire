@@ -44,7 +44,7 @@ function AppInner() {
           {activePage === 'pipeline'    && <PipelinePage leads={leads} onLeadsChange={handleLeadsChange} />}
           {activePage === 'insights'    && <InsightsPage leads={leads} />}
           {activePage === 'campanhas'   && <CampaignsPage />}
-          {activePage === 'leads'       && <LeadsPage leads={leads} loading={loading} onLeadAdded={(l) => handleLeadsChange([l, ...leads])} />}
+          {activePage === 'leads'       && <LeadsPage leads={leads} loading={loading} onLeadAdded={(l) => handleLeadsChange([l, ...leads])} onLeadsChange={handleLeadsChange} />}
           {activePage === 'atividades'  && <ActivitiesPage />}
           {activePage === 'workflows'   && <WorkflowsPage />}
           {activePage === 'templates'   && <TemplatesPage />}
