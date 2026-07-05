@@ -115,6 +115,8 @@ export interface EmailTemplate {
   description: string | null
   subject: string
   html_body: string
+  body_text: string | null
+  image_url: string | null
   is_active: boolean
   channel: CampaignChannel
 }

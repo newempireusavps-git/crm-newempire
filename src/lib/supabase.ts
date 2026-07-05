@@ -249,10 +249,25 @@ export async function fetchEmailTemplates(): Promise<EmailTemplate[]> {
 
 export async function updateEmailTemplate(
   id: string,
-  fields: { name: string; description: string | null; subject: string; html_body: string },
+  fields: {
+    name: string
+    description: string | null
+    subject: string
+    html_body: string
+    body_text?: string | null
+    image_url?: string | null
+  },
 ): Promise<void> {
   const { error } = await supabase.from('email_templates').update(fields).eq('id', id)
   if (error) throw error
+}
+
+export async function uploadTemplateImage(file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'png'
+  const path = `templates/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('photos').upload(path, file, { upsert: false })
+  if (error) throw error
+  return supabase.storage.from('photos').getPublicUrl(path).data.publicUrl
 }
 
 export async function deleteEmailTemplate(id: string): Promise<void> {

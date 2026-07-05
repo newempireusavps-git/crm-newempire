@@ -1,15 +1,74 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Save, Eye, EyeOff, Mail, MessageSquare, AtSign, Share2, Phone,
-  ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2, Trash2,
+  ChevronDown, ChevronUp, Loader2, Plus, X, Users, CheckCircle2, Trash2, ImagePlus,
 } from 'lucide-react'
 import type { EmailTemplate, CampaignChannel, Campaign, CampaignStep } from '@/types/lead'
 import {
   fetchEmailTemplates, updateEmailTemplate, createEmailTemplate, deleteEmailTemplate,
   fetchCampaigns, fetchCampaignSteps, saveCampaignSteps, fetchCampaignLeadIds,
-  fetchLeads,
+  fetchLeads, uploadTemplateImage,
 } from '@/lib/supabase'
+import { buildEmailHtml } from '@/lib/emailWrapper'
 import { cn } from '@/lib/utils'
+
+// One-time fallback for templates saved before the plain-text/wrapper split existed —
+// gives editors a readable starting point instead of raw markup.
+function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function ImageUploadField({ imageUrl, onChange, label }: {
+  imageUrl: string
+  onChange: (url: string) => void
+  label: string
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File) {
+    setUploading(true); setError('')
+    try {
+      const url = await uploadTemplateImage(file)
+      onChange(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao enviar imagem')
+    } finally { setUploading(false) }
+  }
+
+  return (
+    <div>
+      <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">{label}</label>
+      {imageUrl ? (
+        <div className="flex items-center gap-3">
+          <img src={imageUrl} alt="" className="h-16 w-16 object-cover rounded-lg border border-empire-border" />
+          <button type="button" onClick={() => onChange('')} className="text-xs text-red-400 hover:text-red-300 transition-colors">
+            Remover
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-empire-border text-gray-400 text-sm hover:text-white hover:border-empire-gold/40 transition-colors disabled:opacity-50">
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <ImagePlus size={14} />}
+          {uploading ? 'Enviando…' : 'Adicionar imagem'}
+        </button>
+      )}
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleFile(f) }} />
+      {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
+    </div>
+  )
+}
 
 export const CHANNEL_META: Record<CampaignChannel, { label: string; icon: React.ReactNode; color: string }> = {
   email:     { label: 'Email',          icon: <Mail size={14} />,          color: 'text-blue-400 border-blue-400/30 bg-blue-400/10' },
@@ -35,21 +94,32 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
   const [name, setName]       = useState(template.name)
   const [desc, setDesc]       = useState(template.description ?? '')
   const [subject, setSubject] = useState(template.subject ?? '')
-  const [body, setBody]       = useState(template.html_body ?? '')
+  const isEmail = template.channel === 'email'
+  const [bodyText, setBodyText] = useState(
+    template.body_text ?? (isEmail ? htmlToPlainText(template.html_body ?? '') : template.html_body ?? ''),
+  )
+  const [imageUrl, setImageUrl] = useState(template.image_url ?? '')
   const [preview, setPreview] = useState(false)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState('')
 
-  const isEmail = template.channel === 'email'
+  const showImageUpload = template.channel === 'email' || template.channel === 'whatsapp'
+  const compiledHtml = isEmail ? buildEmailHtml({ bodyText, imageUrl: imageUrl || null }) : ''
   const dirty = name !== template.name || desc !== (template.description ?? '') ||
-                subject !== (template.subject ?? '') || body !== (template.html_body ?? '')
+                subject !== (template.subject ?? '') || bodyText !== (template.body_text ?? template.html_body ?? '') ||
+                imageUrl !== (template.image_url ?? '')
 
   async function save() {
     setSaving(true); setError('')
     try {
-      await updateEmailTemplate(template.id, { name: name.trim(), description: desc.trim() || null, subject: subject.trim(), html_body: body })
-      onSaved({ ...template, name: name.trim(), description: desc.trim() || null, subject: subject.trim(), html_body: body })
+      const html_body = isEmail ? buildEmailHtml({ bodyText, imageUrl: imageUrl || null }) : bodyText
+      const fields = {
+        name: name.trim(), description: desc.trim() || null, subject: subject.trim(),
+        html_body, body_text: bodyText, image_url: imageUrl || null,
+      }
+      await updateEmailTemplate(template.id, fields)
+      onSaved({ ...template, ...fields })
       setSaved(true); setTimeout(() => setSaved(false), 2500)
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao salvar') }
     finally { setSaving(false) }
@@ -76,11 +146,16 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
             className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
         </div>
       )}
+      {showImageUpload && (
+        <ImageUploadField imageUrl={imageUrl} onChange={setImageUrl}
+          label={isEmail ? 'Imagem (topo do email)' : 'Imagem (anexo)'} />
+      )}
       <p className="text-xs text-gray-500">
         Use <code className="text-empire-gold bg-empire-navy px-1 rounded">{'{{first_name}}'}</code> para o nome do lead.
+        Separe parágrafos com uma linha em branco.
       </p>
       <div className="flex items-center justify-between">
-        <label className="text-xs text-gray-400 uppercase tracking-wide">{isEmail ? 'HTML' : 'Mensagem'}</label>
+        <label className="text-xs text-gray-400 uppercase tracking-wide">Texto da Mensagem</label>
         {isEmail && (
           <button onClick={() => setPreview((p) => !p)} type="button"
             className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
@@ -89,9 +164,9 @@ function TemplateEditor({ template, onSaved }: { template: EmailTemplate; onSave
         )}
       </div>
       {preview && isEmail
-        ? <div className="h-96 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={body} /></div>
-        : <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={isEmail ? 16 : 7} spellCheck={false}
-            className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y" />
+        ? <div className="h-96 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={compiledHtml} /></div>
+        : <textarea value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={isEmail ? 12 : 7} spellCheck
+            className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 resize-y" />
       }
       {error && <p className="text-red-400 text-xs">{error}</p>}
       <div className="flex items-center justify-end gap-3">
@@ -172,7 +247,8 @@ function CreateModal({ onClose, onCreate }: {
   const [name, setName]             = useState('')
   const [desc, setDesc]             = useState('')
   const [subject, setSubject]       = useState('')
-  const [body, setBody]             = useState('')
+  const [bodyText, setBodyText]     = useState('')
+  const [imageUrl, setImageUrl]     = useState('')
   // Campaign assignment
   const [campaigns, setCampaigns]   = useState<Campaign[]>([])
   const [campaignId, setCampaignId] = useState('')
@@ -188,6 +264,8 @@ function CreateModal({ onClose, onCreate }: {
   const [preview, setPreview]       = useState(false)
 
   const isEmail = channel === 'email'
+  const showImageUpload = channel === 'email' || channel === 'whatsapp'
+  const compiledHtml = isEmail ? buildEmailHtml({ bodyText, imageUrl: imageUrl || null }) : ''
 
   // Load campaigns on mount
   useEffect(() => {
@@ -213,12 +291,15 @@ function CreateModal({ onClose, onCreate }: {
     if (!name.trim()) { setError('Nome é obrigatório'); return }
     setSaving(true); setError('')
     try {
+      const html_body = isEmail ? buildEmailHtml({ bodyText, imageUrl: imageUrl || null }) : bodyText
       const created = await createEmailTemplate({
         name: name.trim(),
         description: desc.trim() || null,
         channel,
         subject: isEmail ? (subject.trim() || name.trim()) : name.trim(),
-        html_body: body,
+        html_body,
+        body_text: bodyText,
+        image_url: imageUrl || null,
         template_key: `custom_${Date.now()}`,
         is_active: true,
       })
@@ -313,10 +394,16 @@ function CreateModal({ onClose, onCreate }: {
             </div>
           )}
 
+          {/* Imagem */}
+          {showImageUpload && (
+            <ImageUploadField imageUrl={imageUrl} onChange={setImageUrl}
+              label={isEmail ? 'Imagem (topo do email)' : 'Imagem (anexo)'} />
+          )}
+
           {/* Conteúdo */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-gray-400 uppercase tracking-wide">{isEmail ? 'HTML do Email' : 'Texto da Mensagem'}</label>
+              <label className="text-xs text-gray-400 uppercase tracking-wide">Texto da Mensagem</label>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-600">
                   <code className="text-empire-gold">{'{{first_name}}'}</code> → nome do lead
@@ -330,12 +417,12 @@ function CreateModal({ onClose, onCreate }: {
               </div>
             </div>
             {preview && isEmail
-              ? <div className="h-64 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={body} /></div>
-              : <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={isEmail ? 10 : 5} spellCheck={false}
+              ? <div className="h-64 border border-empire-border rounded-lg overflow-hidden"><PreviewPane html={compiledHtml} /></div>
+              : <textarea value={bodyText} onChange={(e) => setBodyText(e.target.value)} rows={isEmail ? 10 : 5} spellCheck
                   placeholder={isEmail
-                    ? '<p>Olá {{first_name}},</p>\n<p>Aqui é a New Empire Remodeling...</p>'
+                    ? 'Olá {{first_name}},\n\nAqui é a New Empire Remodeling...'
                     : 'Olá {{first_name}}! Aqui é a New Empire 👋'}
-                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 font-mono resize-y placeholder:text-gray-600" />
+                  className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 resize-y placeholder:text-gray-600" />
             }
           </div>
 
