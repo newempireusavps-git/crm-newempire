@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react'
-import { Download, ChevronLeft, ChevronRight, Search, Plus, X, Loader2 } from 'lucide-react'
+import { useState, useMemo, useRef } from 'react'
+import { Download, Upload, ChevronLeft, ChevronRight, Search, Plus, X, Loader2 } from 'lucide-react'
 import type { Lead } from '@/types/lead'
 import { PIPELINE_STAGES } from '@/types/lead'
 import { LeadModal } from '@/components/Pipeline/LeadModal'
 import { formatDate } from '@/lib/utils'
 import { createLead } from '@/lib/supabase'
+import { Toast, useToast } from '@/components/ui/toast'
 
 interface LeadsPageProps {
   leads: Lead[]
@@ -21,15 +22,56 @@ const CHANNEL_COLORS: Record<string, string> = {
   manual:    'text-gray-400 bg-gray-400/10 border-gray-400/30',
 }
 
+// Must match the leads_service_type_check constraint in Supabase
 const SERVICE_TYPES = [
   'Cabinet Painting',
-  'Cabinet Refinishing',
+  'Cabinet Refacing',
+  'Cabinet Replacement',
   'Kitchen Remodeling',
   'Bathroom Remodeling',
-  'Full Home Remodeling',
   'Flooring',
-  'Other',
+  'Interior Painting',
+  'Exterior Painting',
+  'Drywall Repair',
+  'Home Additions',
+  'New Construction',
+  'Commercial Remodeling',
+  'Design-Build',
+  'General Contracting',
+  'Unknown',
 ]
+
+// Must match the leads_source_check constraint in Supabase
+const VALID_SOURCES = ['Website', 'Facebook', 'Instagram', 'Google', 'WhatsApp', 'Referral', 'Other']
+
+const VALID_CHANNELS = ['manual', 'whatsapp', 'instagram', 'facebook', 'chat', 'sms', 'referral', 'website']
+
+function parseCSV(text: string): string[][] {
+  const rows: string[][] = []
+  let field = ''
+  let row: string[] = []
+  let inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ } else { inQuotes = false }
+      } else field += char
+    } else if (char === '"') {
+      inQuotes = true
+    } else if (char === ',') {
+      row.push(field); field = ''
+    } else if (char === '\r') {
+      // skip, \n handles the line break
+    } else if (char === '\n') {
+      row.push(field); rows.push(row); row = []; field = ''
+    } else {
+      field += char
+    }
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row) }
+  return rows.filter((r) => r.some((c) => c.trim() !== ''))
+}
 
 function Badge({ label, className }: { label: string; className: string }) {
   return (
@@ -71,7 +113,7 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         status,
         property_address:     address.trim() || null,
         city:                 city.trim() || null,
-        source:               'Manual',
+        source:               'Other',
         facebook_psid:        facebookPsid.trim() || null,
         instagram_scoped_id:  instagramId.trim() || null,
       })
@@ -217,6 +259,9 @@ export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
   const [selectedLead, setSelectedLead]   = useState<Lead | null>(null)
   const [page, setPage]                   = useState(1)
   const [showNew, setShowNew]             = useState(false)
+  const [importing, setImporting]         = useState(false)
+  const fileInputRef                      = useRef<HTMLInputElement>(null)
+  const { toast, showToast, hideToast }   = useToast()
 
   const channels = useMemo(() => Array.from(new Set(leads.map((l) => l.channel).filter(Boolean))).sort(), [leads])
   const services = useMemo(() => Array.from(new Set(leads.map((l) => l.service_type).filter((s) => s && s !== 'Unknown'))).sort(), [leads])
@@ -259,6 +304,84 @@ export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
     URL.revokeObjectURL(url)
   }
 
+  async function importCSV(file: File) {
+    setImporting(true)
+    try {
+      const text = (await file.text()).replace(/^﻿/, '')
+      const rows = parseCSV(text)
+      if (rows.length < 2) { showToast('Arquivo CSV vazio ou sem linhas de dados', 'error'); return }
+
+      const headers = rows[0].map((h) => h.trim().toLowerCase())
+      const col = (name: string) => headers.indexOf(name)
+      const iName    = col('nome')
+      const iEmail   = col('email')
+      const iPhone   = col('telefone')
+      const iChannel = col('canal')
+      const iStatus  = col('status')
+      const iService = col('serviço') !== -1 ? col('serviço') : col('servico')
+      const iCity    = col('cidade')
+
+      let ok = 0
+      const errors: string[] = []
+
+      for (let r = 1; r < rows.length; r++) {
+        const cols = rows[r]
+        const lineNo = r + 1
+        const fullName = (iName !== -1 ? cols[iName] ?? '' : '').trim()
+        const [firstName, ...rest] = fullName.split(/\s+/).filter(Boolean)
+        const lastName = rest.join(' ')
+        const phone = (iPhone !== -1 ? cols[iPhone] ?? '' : '').trim()
+
+        if (!firstName || !phone) {
+          errors.push(`Linha ${lineNo}: nome e telefone são obrigatórios`)
+          continue
+        }
+
+        const rawChannel = (iChannel !== -1 ? cols[iChannel] ?? '' : '').trim().toLowerCase()
+        const channel = VALID_CHANNELS.includes(rawChannel) ? rawChannel : 'website'
+
+        const rawStatus = (iStatus !== -1 ? cols[iStatus] ?? '' : '').trim()
+        const statusMatch = PIPELINE_STAGES.find((s) => s.status === rawStatus || s.label === rawStatus)
+        const status = statusMatch ? statusMatch.status : 'New Lead'
+
+        const rawService = (iService !== -1 ? cols[iService] ?? '' : '').trim()
+        const service_type = SERVICE_TYPES.includes(rawService) ? rawService : 'Unknown'
+
+        const rawEmail = (iEmail !== -1 ? cols[iEmail] ?? '' : '').trim()
+
+        try {
+          const lead = await createLead({
+            first_name: firstName,
+            last_name: lastName,
+            phone,
+            email: rawEmail || null,
+            channel,
+            service_type,
+            status,
+            property_address: null,
+            city: (iCity !== -1 ? cols[iCity] ?? '' : '').trim() || null,
+            source: VALID_SOURCES.includes('Other') ? 'Other' : 'Website',
+          })
+          onLeadAdded?.(lead)
+          ok++
+        } catch (e) {
+          errors.push(`Linha ${lineNo}: ${e instanceof Error ? e.message : 'erro desconhecido'}`)
+        }
+      }
+
+      if (errors.length === 0) {
+        showToast(`${ok} lead(s) importado(s) com sucesso!`)
+      } else {
+        showToast(`${ok} importado(s), ${errors.length} falharam. Veja o console para detalhes.`, 'error')
+        console.warn('Erros ao importar CSV:', errors)
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Erro ao importar CSV', 'error')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const selectClass = 'bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 min-w-[140px]'
 
   return (
@@ -273,6 +396,17 @@ export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".csv" className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) void importCSV(file)
+                e.target.value = ''
+              }} />
+            <button onClick={() => fileInputRef.current?.click()} disabled={importing}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-empire-border text-gray-300 text-sm hover:text-white hover:border-empire-gold/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {importing ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}
+              {importing ? 'Importando…' : 'Importar CSV'}
+            </button>
             <button onClick={exportCSV} disabled={leads.length === 0}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-empire-border text-gray-300 text-sm hover:text-white hover:border-empire-gold/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               <Download size={15} />
@@ -400,6 +534,8 @@ export function LeadsPage({ leads, loading, onLeadAdded }: LeadsPageProps) {
           }}
         />
       )}
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
     </>
   )
 }

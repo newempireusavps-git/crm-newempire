@@ -45,8 +45,8 @@ export function LeadsChart({ leads }: LeadsChartProps) {
     return {
       name: w.label,
       total: weekLeads.length,
-      qualificados: weekLeads.filter((l) => l.status === 'qualificado').length,
-      desqualificados: weekLeads.filter((l) => l.status === 'desqualificado').length,
+      qualificados: weekLeads.filter((l) => l.status === 'Qualified').length,
+      desqualificados: weekLeads.filter((l) => l.status === 'Lost').length,
     }
   })
 
