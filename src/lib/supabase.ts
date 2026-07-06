@@ -53,6 +53,11 @@ export async function deleteLead(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function deleteLeads(ids: string[]): Promise<void> {
+  const { error } = await supabase.from('leads').delete().in('id', ids)
+  if (error) throw error
+}
+
 export async function createLead(
   fields: {
     first_name: string

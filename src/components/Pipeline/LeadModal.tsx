@@ -12,6 +12,7 @@ import {
   removeLeadFromCampaign,
   updateLead,
   deleteLead,
+  addActivity,
 } from '@/lib/supabase'
 
 type Tab = 'info' | 'timeline' | 'campanhas'
@@ -242,6 +243,21 @@ function EditLeadForm({ lead, onSaved, onCancel }: {
         facebook_psid: facebookPsid.trim() || null,
         instagram_scoped_id: instagramId.trim() || null,
       })
+      if (status !== lead.status) {
+        const fromLabel = PIPELINE_STAGES.find((s) => s.status === lead.status)?.label ?? lead.status
+        const toLabel = PIPELINE_STAGES.find((s) => s.status === status)?.label ?? status
+        await addActivity({
+          lead_id: lead.id, type: 'status_change',
+          title: `Status alterado: ${fromLabel} → ${toLabel}`,
+          description: null, metadata: { from: lead.status, to: status },
+        })
+      } else {
+        await addActivity({
+          lead_id: lead.id, type: 'note',
+          title: 'Lead editado', description: 'Dados do lead atualizados manualmente.',
+          metadata: {},
+        })
+      }
       onSaved(updated)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao salvar lead')

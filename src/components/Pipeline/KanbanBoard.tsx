@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core'
 import type { Lead } from '@/types/lead'
 import { PIPELINE_STAGES } from '@/types/lead'
-import { updateLeadStatus } from '@/lib/supabase'
+import { updateLeadStatus, addActivity } from '@/lib/supabase'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
 import { LeadModal } from './LeadModal'
@@ -64,6 +64,15 @@ export function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
 
       try {
         await updateLeadStatus(draggedLead.id, targetStatus)
+        const fromLabel = PIPELINE_STAGES.find((s) => s.status === draggedLead.status)?.label ?? draggedLead.status
+        const toLabel = PIPELINE_STAGES.find((s) => s.status === targetStatus)?.label ?? targetStatus
+        await addActivity({
+          lead_id: draggedLead.id,
+          type: 'status_change',
+          title: `Status alterado: ${fromLabel} → ${toLabel}`,
+          description: null,
+          metadata: { from: draggedLead.status, to: targetStatus },
+        })
       } catch {
         onLeadsChange(leads)
       }

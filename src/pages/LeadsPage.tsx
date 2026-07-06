@@ -1,10 +1,10 @@
 import { useState, useMemo, useRef } from 'react'
-import { Download, Upload, ChevronLeft, ChevronRight, Search, Plus, X, Loader2 } from 'lucide-react'
+import { Download, Upload, ChevronLeft, ChevronRight, Search, Plus, X, Loader2, Trash2 } from 'lucide-react'
 import type { Lead } from '@/types/lead'
 import { PIPELINE_STAGES, SERVICE_TYPES, VALID_SOURCES, VALID_CHANNELS } from '@/types/lead'
 import { LeadModal } from '@/components/Pipeline/LeadModal'
 import { formatDate } from '@/lib/utils'
-import { createLead } from '@/lib/supabase'
+import { createLead, deleteLeads } from '@/lib/supabase'
 import { Toast, useToast } from '@/components/ui/toast'
 
 interface LeadsPageProps {
@@ -237,6 +237,9 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
   const [page, setPage]                   = useState(1)
   const [showNew, setShowNew]             = useState(false)
   const [importing, setImporting]         = useState(false)
+  const [selectedIds, setSelectedIds]     = useState<Set<string>>(new Set())
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting]   = useState(false)
   const fileInputRef                      = useRef<HTMLInputElement>(null)
   const { toast, showToast, hideToast }   = useToast()
 
@@ -255,7 +258,44 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage   = Math.min(page, totalPages)
   const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
-  const reset      = () => setPage(1)
+  const reset      = () => { setPage(1); setSelectedIds(new Set()) }
+  const changePage = (p: number) => { setPage(p); setSelectedIds(new Set()) }
+
+  const allPageSelected = paginated.length > 0 && paginated.every((l) => selectedIds.has(l.id))
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allPageSelected) {
+        const next = new Set(prev)
+        paginated.forEach((l) => next.delete(l.id))
+        return next
+      }
+      const next = new Set(prev)
+      paginated.forEach((l) => next.add(l.id))
+      return next
+    })
+  }
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  async function handleBulkDelete() {
+    setBulkDeleting(true)
+    try {
+      await deleteLeads(Array.from(selectedIds))
+      onLeadsChange?.(leads.filter((l) => !selectedIds.has(l.id)))
+      showToast(`${selectedIds.size} lead(s) removido(s)`)
+      setSelectedIds(new Set())
+      setConfirmBulkDelete(false)
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Erro ao remover leads', 'error')
+    } finally {
+      setBulkDeleting(false)
+    }
+  }
 
   function exportCSV() {
     const headers = ['Nome', 'Email', 'Telefone', 'Canal', 'Status', 'Serviço', 'Prioridade', 'Score', 'Cidade', 'Data']
@@ -399,6 +439,34 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
           </div>
         </div>
 
+        {/* Bulk actions */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center justify-between gap-3 bg-empire-gold/10 border border-empire-gold/30 rounded-xl px-4 py-3">
+            <p className="text-sm text-white">{selectedIds.size} lead(s) selecionado(s)</p>
+            <div className="flex items-center gap-2">
+              {!confirmBulkDelete ? (
+                <button onClick={() => setConfirmBulkDelete(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-red-500/40 text-red-400 text-sm hover:bg-red-500/10 transition-colors">
+                  <Trash2 size={14} /> Excluir selecionados
+                </button>
+              ) : (
+                <>
+                  <span className="text-xs text-red-400">Confirmar exclusão de {selectedIds.size} lead(s)?</span>
+                  <button onClick={() => void handleBulkDelete()} disabled={bulkDeleting}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-500/20 border border-red-500/60 text-red-300 text-sm hover:bg-red-500/30 transition-colors disabled:opacity-50">
+                    {bulkDeleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    {bulkDeleting ? 'Removendo…' : 'Confirmar'}
+                  </button>
+                  <button onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}
+                    className="p-1.5 text-gray-400 hover:text-white transition-colors">
+                    <X size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center bg-empire-card border border-empire-border rounded-xl p-4">
           <div className="relative flex-1 min-w-[200px]">
@@ -443,6 +511,10 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-empire-border text-left bg-empire-navy/30">
+                      <th className="px-4 py-3 w-10">
+                        <input type="checkbox" checked={allPageSelected} onChange={toggleSelectAll}
+                          className="w-4 h-4 rounded border-empire-border bg-empire-navy accent-empire-gold cursor-pointer" />
+                      </th>
                       {['Nome', 'Canal', 'Status', 'Serviço', 'Score', 'Data'].map((h) => (
                         <th key={h} className="px-4 py-3 text-empire-muted font-medium text-xs uppercase tracking-wide">{h}</th>
                       ))}
@@ -451,8 +523,12 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
                   <tbody>
                     {paginated.map((lead, i) => (
                       <tr key={lead.id}
-                        className={`border-b border-empire-border/50 hover:bg-empire-gold/5 cursor-pointer transition-colors ${i % 2 === 1 ? 'bg-empire-navy/20' : ''}`}
+                        className={`border-b border-empire-border/50 hover:bg-empire-gold/5 cursor-pointer transition-colors ${i % 2 === 1 ? 'bg-empire-navy/20' : ''} ${selectedIds.has(lead.id) ? 'bg-empire-gold/5' : ''}`}
                         onClick={() => setSelectedLead(lead)}>
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <input type="checkbox" checked={selectedIds.has(lead.id)} onChange={() => toggleSelect(lead.id)}
+                            className="w-4 h-4 rounded border-empire-border bg-empire-navy accent-empire-gold cursor-pointer" />
+                        </td>
                         <td className="px-4 py-3">
                           <p className="text-empire-gold font-medium hover:underline">
                             {`${lead.first_name} ${lead.last_name}`.trim() || '—'}
@@ -484,11 +560,11 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
                 <div className="flex items-center justify-between px-4 py-3 border-t border-empire-border">
                   <p className="text-empire-muted text-sm">Página {safePage} de {totalPages} · {filtered.length} leads</p>
                   <div className="flex gap-2">
-                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage === 1}
+                    <button onClick={() => changePage(Math.max(1, safePage - 1))} disabled={safePage === 1}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-empire-navy border border-empire-border text-sm text-white hover:border-empire-gold/40 disabled:opacity-40 transition-colors">
                       <ChevronLeft size={15} /> Anterior
                     </button>
-                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}
+                    <button onClick={() => changePage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}
                       className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-empire-navy border border-empire-border text-sm text-white hover:border-empire-gold/40 disabled:opacity-40 transition-colors">
                       Próximo <ChevronRight size={15} />
                     </button>
