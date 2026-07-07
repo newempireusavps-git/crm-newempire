@@ -6,6 +6,7 @@ export const PIPELINE_STAGES = [
   { status: 'Agendamento',     label: 'Agendamento',       color: 'border-t-orange-500' },
   { status: 'Nutricao',        label: 'Nutrição',          color: 'border-t-pink-500' },
   { status: 'Followup',        label: 'Followup',          color: 'border-t-cyan-500' },
+  { status: 'Lost',            label: 'Desqualificado',    color: 'border-t-red-500' },
 ] as const
 
 export type LeadStatus = (typeof PIPELINE_STAGES)[number]['status']
