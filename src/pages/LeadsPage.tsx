@@ -248,7 +248,7 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
 
   const filtered = useMemo(() => leads.filter((l) => {
     const name = `${l.first_name} ${l.last_name}`.toLowerCase()
-    if (search && !name.includes(search.toLowerCase()) && !(l.email ?? '').toLowerCase().includes(search.toLowerCase()) && !l.phone.includes(search)) return false
+    if (search && !name.includes(search.toLowerCase()) && !(l.email ?? '').toLowerCase().includes(search.toLowerCase()) && !(l.phone ?? '').includes(search)) return false
     if (filterStatus  !== 'todos' && l.status       !== filterStatus)  return false
     if (filterChannel !== 'todos' && l.channel      !== filterChannel) return false
     if (filterService !== 'todos' && l.service_type !== filterService) return false
