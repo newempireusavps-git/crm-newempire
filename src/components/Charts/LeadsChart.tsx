@@ -49,6 +49,7 @@ export function LeadsChart({ leads }: LeadsChartProps) {
       qualificados: weekLeads.filter(
         (l) => !['New Lead', 'Qualificando', 'Lost'].includes(l.status),
       ).length,
+      fechados: weekLeads.filter((l) => l.status === 'Qualified').length,
       desqualificados: weekLeads.filter((l) => l.status === 'Lost').length,
     }
   })
@@ -85,6 +86,14 @@ export function LeadsChart({ leads }: LeadsChartProps) {
             dataKey="qualificados"
             name="Qualificados"
             stroke="#FFD700"
+            strokeWidth={2}
+            dot={{ r: 3 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="fechados"
+            name="Fechados"
+            stroke="#22c55e"
             strokeWidth={2}
             dot={{ r: 3 }}
           />

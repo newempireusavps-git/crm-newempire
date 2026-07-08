@@ -12,9 +12,11 @@ import {
 import type { Lead } from '@/types/lead'
 import { PIPELINE_STAGES } from '@/types/lead'
 import { updateLeadStatus, addActivity } from '@/lib/supabase'
+import { triggerContractWorkflow } from '@/lib/n8n'
 import { KanbanColumn } from './KanbanColumn'
 import { LeadCard } from './LeadCard'
 import { LeadModal } from './LeadModal'
+import { Toast, useToast } from '@/components/ui/toast'
 
 interface KanbanBoardProps {
   leads: Lead[]
@@ -24,6 +26,7 @@ interface KanbanBoardProps {
 export function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const { toast, showToast, hideToast } = useToast()
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -73,11 +76,20 @@ export function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
           description: null,
           metadata: { from: draggedLead.status, to: targetStatus },
         })
+
+        if (targetStatus === 'Qualified') {
+          if (draggedLead.session_id) {
+            await triggerContractWorkflow(draggedLead.session_id)
+            showToast('Contrato gerado e enviado por e-mail ao cliente!')
+          } else {
+            showToast('Lead sem sessão vinculada — não foi possível gerar o contrato automaticamente.', 'error')
+          }
+        }
       } catch {
         onLeadsChange(leads)
       }
     },
-    [leads, onLeadsChange],
+    [leads, onLeadsChange, showToast],
   )
 
   return (
@@ -122,6 +134,8 @@ export function KanbanBoard({ leads, onLeadsChange }: KanbanBoardProps) {
           setSelectedLead(null)
         }}
       />
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={hideToast} />}
     </>
   )
 }

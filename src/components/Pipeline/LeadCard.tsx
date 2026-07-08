@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { Mail, Phone, DollarSign, Wifi, Eye } from 'lucide-react'
 import type { Lead } from '@/types/lead'
+import { CHANNEL_LABELS } from '@/types/lead'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface LeadCardProps {
@@ -64,7 +65,7 @@ export function LeadCard({ lead, onViewDetails }: LeadCardProps) {
           {lead.channel && (
             <div className="flex items-center gap-1.5">
               <Wifi size={11} className="shrink-0" />
-              <span className="capitalize truncate">{lead.channel}</span>
+              <span className="truncate">{CHANNEL_LABELS[lead.channel] ?? lead.channel}</span>
             </div>
           )}
           {lead.service_type && lead.service_type !== 'Unknown' && (

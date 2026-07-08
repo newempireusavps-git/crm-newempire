@@ -6,6 +6,7 @@ export const PIPELINE_STAGES = [
   { status: 'Agendamento',     label: 'Agendamento',       color: 'border-t-orange-500' },
   { status: 'Nutricao',        label: 'Nutrição',          color: 'border-t-pink-500' },
   { status: 'Followup',        label: 'Followup',          color: 'border-t-cyan-500' },
+  { status: 'Qualified',       label: 'Fechado / Contrato Enviado', color: 'border-t-green-500' },
   { status: 'Lost',            label: 'Desqualificado',    color: 'border-t-red-500' },
 ] as const
 
@@ -33,7 +34,22 @@ export const SERVICE_TYPES = [
 // Must match the leads_source_check constraint in Supabase
 export const VALID_SOURCES = ['Website', 'Facebook', 'Instagram', 'Google', 'WhatsApp', 'Referral', 'Other']
 
-export const VALID_CHANNELS = ['manual', 'whatsapp', 'instagram', 'facebook', 'chat', 'sms', 'referral', 'website']
+export const VALID_CHANNELS = ['manual', 'whatsapp', 'instagram', 'facebook', 'chat', 'sms', 'referral', 'website', 'facebook_ad', 'instagram_ad']
+
+// Friendly display labels for channel values
+export const CHANNEL_LABELS: Record<string, string> = {
+  manual: 'Manual',
+  whatsapp: 'WhatsApp',
+  instagram: 'Instagram',
+  facebook: 'Facebook',
+  chat: 'Chat',
+  sms: 'SMS',
+  email: 'Email',
+  referral: 'Indicação',
+  website: 'Website',
+  facebook_ad: 'Facebook Ads',
+  instagram_ad: 'Instagram Ads',
+}
 
 // Must match the leads_priority_check constraint in Supabase
 export const PRIORITY_LEVELS = ['Cold', 'Warm', 'Hot', 'Very Hot']

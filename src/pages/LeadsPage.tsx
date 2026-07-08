@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react'
 import { Download, Upload, ChevronLeft, ChevronRight, Search, Plus, X, Loader2, Trash2 } from 'lucide-react'
 import type { Lead } from '@/types/lead'
-import { PIPELINE_STAGES, SERVICE_TYPES, VALID_SOURCES, VALID_CHANNELS } from '@/types/lead'
+import { PIPELINE_STAGES, SERVICE_TYPES, VALID_SOURCES, VALID_CHANNELS, CHANNEL_LABELS } from '@/types/lead'
 import { LeadModal } from '@/components/Pipeline/LeadModal'
 import { formatDate } from '@/lib/utils'
 import { createLead, deleteLeads } from '@/lib/supabase'
@@ -15,12 +15,16 @@ interface LeadsPageProps {
 }
 
 const CHANNEL_COLORS: Record<string, string> = {
-  chat:      'text-purple-400 bg-purple-400/10 border-purple-400/30',
-  whatsapp:  'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
-  instagram: 'text-pink-400 bg-pink-400/10 border-pink-400/30',
-  facebook:  'text-blue-400 bg-blue-400/10 border-blue-400/30',
-  sms:       'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
-  manual:    'text-gray-400 bg-gray-400/10 border-gray-400/30',
+  chat:         'text-purple-400 bg-purple-400/10 border-purple-400/30',
+  whatsapp:     'text-emerald-400 bg-emerald-400/10 border-emerald-400/30',
+  instagram:    'text-pink-400 bg-pink-400/10 border-pink-400/30',
+  facebook:     'text-blue-400 bg-blue-400/10 border-blue-400/30',
+  sms:          'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
+  email:        'text-cyan-400 bg-cyan-400/10 border-cyan-400/30',
+  website:      'text-orange-400 bg-orange-400/10 border-orange-400/30',
+  manual:       'text-gray-400 bg-gray-400/10 border-gray-400/30',
+  facebook_ad:  'text-indigo-400 bg-indigo-400/10 border-indigo-400/30',
+  instagram_ad: 'text-fuchsia-400 bg-fuchsia-400/10 border-fuchsia-400/30',
 }
 
 function parseCSV(text: string): string[][] {
@@ -154,6 +158,8 @@ function NewLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                 <option value="sms">SMS</option>
                 <option value="referral">Indicação</option>
                 <option value="website">Website</option>
+                <option value="facebook_ad">Facebook Ads</option>
+                <option value="instagram_ad">Instagram Ads</option>
               </select>
             </div>
             <div>
@@ -481,7 +487,7 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
           </select>
           <select value={filterChannel} onChange={(e) => { setFilterChannel(e.target.value); reset() }} className={selectClass}>
             <option value="todos">Todos os canais</option>
-            {channels.map((c) => <option key={c} value={c}>{c}</option>)}
+            {channels.map((c) => <option key={c} value={c}>{CHANNEL_LABELS[c] ?? c}</option>)}
           </select>
           <select value={filterService} onChange={(e) => { setFilterService(e.target.value); reset() }} className={selectClass}>
             <option value="todos">Todos os serviços</option>
@@ -537,7 +543,7 @@ export function LeadsPage({ leads, loading, onLeadAdded, onLeadsChange }: LeadsP
                           {lead.phone && <p className="text-gray-600 text-xs">{lead.phone}</p>}
                         </td>
                         <td className="px-4 py-3">
-                          <Badge label={lead.channel}
+                          <Badge label={CHANNEL_LABELS[lead.channel] ?? lead.channel}
                             className={CHANNEL_COLORS[lead.channel?.toLowerCase()] ?? 'text-gray-400 bg-gray-400/10 border-gray-400/30'} />
                         </td>
                         <td className="px-4 py-3">

@@ -1,5 +1,6 @@
 import { useFilters } from '@/context/FilterContext'
 import type { Lead, FilterPeriodo } from '@/types/lead'
+import { CHANNEL_LABELS } from '@/types/lead'
 
 interface GlobalFiltersProps {
   leads: Lead[]
@@ -46,7 +47,7 @@ export function GlobalFilters({ leads }: GlobalFiltersProps) {
       >
         {channels.map((c) => (
           <option key={c} value={c}>
-            {c === 'todos' ? 'Todos os canais' : c}
+            {c === 'todos' ? 'Todos os canais' : (CHANNEL_LABELS[c] ?? c)}
           </option>
         ))}
       </select>

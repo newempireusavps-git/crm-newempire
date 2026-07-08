@@ -8,7 +8,8 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import type { Lead } from '@/types/lead'
-import { TrendingUp, Award, Calendar } from 'lucide-react'
+import { CHANNEL_LABELS } from '@/types/lead'
+import { TrendingUp, Award, Calendar, Megaphone } from 'lucide-react'
 
 interface InsightsPanelProps {
   leads: Lead[]
@@ -64,10 +65,15 @@ export function InsightsPanel({ leads }: InsightsPanelProps) {
 
   const bestOrigem = origemStats[0]
 
+  // Meta Ads (paid) leads — facebook_ad / instagram_ad channels
+  const adsLeads = leads.filter((l) => l.channel === 'facebook_ad' || l.channel === 'instagram_ad')
+  const adsHot = adsLeads.filter((l) => l.priority === 'Hot').length
+  const adsRate = adsLeads.length > 0 ? Math.round((adsHot / adsLeads.length) * 100) : 0
+
   return (
     <div className="space-y-6">
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-empire-card border border-empire-border rounded-xl p-5">
           <div className="flex items-center gap-3 mb-3">
             <Calendar size={18} className="text-empire-gold" />
@@ -93,11 +99,22 @@ export function InsightsPanel({ leads }: InsightsPanelProps) {
           </div>
           {bestOrigem ? (
             <div>
-              <p className="text-white text-lg font-bold">{bestOrigem.origem}</p>
+              <p className="text-white text-lg font-bold">{CHANNEL_LABELS[bestOrigem.origem] ?? bestOrigem.origem}</p>
               <p className="text-gray-400 text-sm">{bestOrigem.taxa}% conversão</p>
             </div>
           ) : (
             <p className="text-gray-500 text-sm">Sem dados</p>
+          )}
+        </div>
+
+        <div className="bg-empire-card border border-empire-border rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-3">
+            <Megaphone size={18} className="text-fuchsia-400" />
+            <span className="text-gray-400 text-sm">Leads via Ads (Meta)</span>
+          </div>
+          <p className="text-white text-3xl font-bold">{adsLeads.length}</p>
+          {adsLeads.length > 0 && (
+            <p className="text-gray-400 text-sm mt-1">{adsRate}% quentes</p>
           )}
         </div>
       </div>
@@ -140,7 +157,7 @@ export function InsightsPanel({ leads }: InsightsPanelProps) {
               <tbody className="divide-y divide-empire-border">
                 {origemStats.map((o) => (
                   <tr key={o.origem} className="hover:bg-empire-navy/50">
-                    <td className="py-2 text-white">{o.origem}</td>
+                    <td className="py-2 text-white">{CHANNEL_LABELS[o.origem] ?? o.origem}</td>
                     <td className="py-2 text-right text-gray-400">{o.total}</td>
                     <td className="py-2 text-right text-green-400">{o.qualificados}</td>
                     <td className="py-2 text-right">
