@@ -1,9 +1,35 @@
 import { useState, useEffect, useMemo } from 'react'
-import { FileSignature, Clock, CheckCircle2, Loader2, MapPin, Wrench, Calendar, Mail } from 'lucide-react'
+import { FileSignature, Clock, CheckCircle2, Loader2, MapPin, Wrench, Calendar, Mail, Plus, X, Download } from 'lucide-react'
 import { fetchContracts } from '@/lib/supabase'
 import type { Contract } from '@/types/lead'
+import { SERVICE_TYPES } from '@/types/lead'
 import { formatDate } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+
+const MANUAL_CONTRACT_WEBHOOK = 'https://n8n-n8n.ixiqur.easypanel.host/webhook/manual-contract'
+const DEFAULT_PAYMENT_TERMS = '50% deposit due upon signing this agreement. Remaining 50% balance due upon substantial completion of the work.'
+
+interface ContractFormState {
+  client_name: string
+  client_email: string
+  property_address: string
+  service_type: string
+  services: string
+  start_date: string
+  completion_date: string
+  payment_terms: string
+}
+
+const emptyForm: ContractFormState = {
+  client_name: '',
+  client_email: '',
+  property_address: '',
+  service_type: SERVICE_TYPES[0],
+  services: '',
+  start_date: '',
+  completion_date: '',
+  payment_terms: DEFAULT_PAYMENT_TERMS,
+}
 
 function stripHtml(html: string | null): string {
   if (!html) return ''
@@ -66,16 +92,138 @@ function ContractCard({ contract, onView }: { contract: Contract; onView: (c: Co
   )
 }
 
+function ContractGeneratorModal({ onClose, onGenerated }: { onClose: () => void; onGenerated: () => void }) {
+  const [form, setForm] = useState<ContractFormState>(emptyForm)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState('')
+
+  function update<K extends keyof ContractFormState>(key: K, value: ContractFormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }))
+  }
+
+  async function handleGenerate(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.client_name.trim() || !form.client_email.trim()) {
+      setError('Nome e e-mail do cliente são obrigatórios')
+      return
+    }
+    setGenerating(true)
+    setError('')
+    try {
+      const res = await fetch(MANUAL_CONTRACT_WEBHOOK, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          services: form.services.split('\n').map((s) => s.trim()).filter(Boolean),
+        }),
+      })
+      if (!res.ok) throw new Error(`Erro ao gerar contrato (${res.status})`)
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Contrato - ${form.client_name}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      onGenerated()
+      onClose()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao gerar contrato')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-empire-card border border-empire-border rounded-xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-empire-border flex items-center justify-between shrink-0">
+          <h2 className="text-white font-semibold">Gerar Novo Contrato</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <form onSubmit={(e) => void handleGenerate(e)} className="px-6 py-5 space-y-4 overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Nome do cliente *</label>
+              <input value={form.client_name} onChange={(e) => update('client_name', e.target.value)}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">E-mail *</label>
+              <input type="email" value={form.client_email} onChange={(e) => update('client_email', e.target.value)}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Endereço do imóvel</label>
+            <input value={form.property_address} onChange={(e) => update('property_address', e.target.value)}
+              placeholder="Rua, cidade"
+              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Tipo de serviço</label>
+            <select value={form.service_type} onChange={(e) => update('service_type', e.target.value)}
+              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60">
+              {SERVICE_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Serviços incluídos (um por linha)</label>
+            <textarea value={form.services} onChange={(e) => update('services', e.target.value)} rows={3}
+              placeholder={'Cabinet box and frame painting\nCabinet door and drawer front painting'}
+              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 placeholder:text-gray-600 resize-none" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Data de início</label>
+              <input type="date" value={form.start_date} onChange={(e) => update('start_date', e.target.value)}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Data de conclusão</label>
+              <input type="date" value={form.completion_date} onChange={(e) => update('completion_date', e.target.value)}
+                className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60" />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 uppercase tracking-wide block mb-1.5">Condições de pagamento</label>
+            <textarea value={form.payment_terms} onChange={(e) => update('payment_terms', e.target.value)} rows={2}
+              className="w-full bg-empire-navy border border-empire-border text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-empire-gold/60 resize-none" />
+          </div>
+          {error && <p className="text-red-400 text-xs">{error}</p>}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2 rounded-lg border border-empire-border text-gray-400 text-sm hover:text-white transition-colors">Cancelar</button>
+            <button type="submit" disabled={generating}
+              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 disabled:opacity-50 transition-colors">
+              {generating ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+              {generating ? 'Gerando…' : 'Gerar PDF'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Contract | null>(null)
+  const [showGenerator, setShowGenerator] = useState(false)
 
-  useEffect(() => {
+  function loadContracts() {
     setLoading(true)
-    fetchContracts()
+    return fetchContracts()
       .then(setContracts)
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadContracts()
   }, [])
 
   const pending = useMemo(() => contracts.filter((c) => c.status !== 'signed'), [contracts])
@@ -83,9 +231,15 @@ export function ContractsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-white text-2xl font-bold">Contratos</h1>
-        <p className="text-gray-500 text-sm mt-1">Acompanhe contratos enviados e assinados pelos clientes.</p>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-white text-2xl font-bold">Contratos</h1>
+          <p className="text-gray-500 text-sm mt-1">Acompanhe contratos enviados e assinados pelos clientes.</p>
+        </div>
+        <button onClick={() => setShowGenerator(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-empire-gold text-empire-dark text-sm font-semibold hover:bg-empire-gold/90 transition-colors shrink-0">
+          <Plus size={15} /> Novo Contrato
+        </button>
       </div>
 
       {/* Summary cards */}
@@ -215,6 +369,10 @@ export function ContractsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {showGenerator && (
+        <ContractGeneratorModal onClose={() => setShowGenerator(false)} onGenerated={loadContracts} />
+      )}
     </div>
   )
 }
