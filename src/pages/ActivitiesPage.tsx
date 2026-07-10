@@ -3,6 +3,7 @@ import { Clock, Mail, MessageSquare, Bell, FileText, ArrowRight, Megaphone } fro
 import { fetchAllActivities } from '@/lib/supabase'
 import type { LeadActivity } from '@/types/lead'
 import { formatDate } from '@/lib/utils'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 const TYPE_CONFIG: Record<
   LeadActivity['type'],
@@ -20,6 +21,7 @@ export function ActivitiesPage() {
   const [activities, setActivities] = useState<LeadActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<LeadActivity['type'] | 'todos'>('todos')
+  const [selected, setSelected] = useState<LeadActivity | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -81,9 +83,10 @@ export function ActivitiesPage() {
             {filtered.map((act) => {
               const config = TYPE_CONFIG[act.type]
               return (
-                <div
+                <button
                   key={act.id}
-                  className="px-5 py-4 hover:bg-empire-navy/30 transition-colors flex items-start gap-4"
+                  onClick={() => setSelected(act)}
+                  className="w-full text-left px-5 py-4 hover:bg-empire-navy/30 transition-colors flex items-start gap-4"
                 >
                   <div className={`flex items-center justify-center w-8 h-8 rounded-lg border shrink-0 ${config.color}`}>
                     {config.icon}
@@ -100,12 +103,49 @@ export function ActivitiesPage() {
                     )}
                     <p className="text-gray-600 text-xs mt-1.5">{formatDate(act.created_at)}</p>
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
         )}
       </div>
+
+      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+          {selected && (
+            <>
+              <DialogHeader className="shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center justify-center w-9 h-9 rounded-lg border shrink-0 ${TYPE_CONFIG[selected.type].color}`}>
+                    {TYPE_CONFIG[selected.type].icon}
+                  </div>
+                  <div>
+                    <DialogTitle>{selected.title}</DialogTitle>
+                    <p className="text-empire-muted text-xs mt-0.5">{formatDate(selected.created_at)}</p>
+                  </div>
+                </div>
+              </DialogHeader>
+              <div className="overflow-y-auto space-y-4">
+                {selected.description && (
+                  <p className="text-gray-300 text-sm whitespace-pre-wrap leading-relaxed">
+                    {selected.description}
+                  </p>
+                )}
+                {selected.metadata && Object.keys(selected.metadata).length > 0 && (
+                  <div className="border-t border-empire-border pt-3 space-y-1.5">
+                    {Object.entries(selected.metadata).map(([key, value]) => (
+                      <div key={key} className="flex items-start gap-2 text-xs">
+                        <span className="text-empire-muted shrink-0 capitalize">{key.replace(/_/g, ' ')}:</span>
+                        <span className="text-gray-300 break-words">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
