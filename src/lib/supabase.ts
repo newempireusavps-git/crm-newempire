@@ -143,6 +143,13 @@ export async function addLeadToCampaign(leadId: string, campaignId: string): Pro
   if (error) throw error
 }
 
+export async function addLeadsToCampaign(leadIds: string[], campaignId: string): Promise<void> {
+  if (leadIds.length === 0) return
+  const rows = leadIds.map((lead_id) => ({ lead_id, campaign_id: campaignId }))
+  const { error } = await supabase.from('lead_campaigns').upsert(rows)
+  if (error) throw error
+}
+
 export async function removeLeadFromCampaign(leadId: string, campaignId: string): Promise<void> {
   const { error } = await supabase
     .from('lead_campaigns')
