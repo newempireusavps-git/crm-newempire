@@ -7,6 +7,7 @@ import { InsightsPage } from '@/pages/InsightsPage'
 import { CampaignsPage } from '@/pages/CampaignsPage'
 import { LeadsPage } from '@/pages/LeadsPage'
 import { ActivitiesPage } from '@/pages/ActivitiesPage'
+import { ContractsPage } from '@/pages/ContractsPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
 import { TemplatesPage } from '@/pages/TemplatesPage'
 import { FilterProvider } from '@/context/FilterContext'
@@ -46,6 +47,7 @@ function AppInner() {
           {activePage === 'campanhas'   && <CampaignsPage />}
           {activePage === 'leads'       && <LeadsPage leads={leads} loading={loading} onLeadAdded={(l) => handleLeadsChange([l, ...leads])} onLeadsChange={handleLeadsChange} />}
           {activePage === 'atividades'  && <ActivitiesPage />}
+          {activePage === 'contratos'   && <ContractsPage />}
           {activePage === 'workflows'   && <WorkflowsPage />}
           {activePage === 'templates'   && <TemplatesPage />}
         </main>

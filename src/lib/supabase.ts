@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Lead, Campaign, LeadActivity, EmailTemplate, CampaignStep } from '@/types/lead'
+import type { Lead, Campaign, LeadActivity, EmailTemplate, CampaignStep, Contract } from '@/types/lead'
 
 const supabaseUrl = 'https://xvcqdizrsfvfuvvgilgm.supabase.co'
 const supabaseAnonKey =
@@ -197,6 +197,17 @@ export async function addActivity(
 ): Promise<void> {
   const { error } = await supabase.from('lead_activities').insert(activity)
   if (error) throw error
+}
+
+// ── Contracts ────────────────────────────────────────────────────────────────
+
+export async function fetchContracts(): Promise<Contract[]> {
+  const { data, error } = await supabase
+    .from('contracts')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Contract[]
 }
 
 // ── Campaign Steps ────────────────────────────────────────────────────────────

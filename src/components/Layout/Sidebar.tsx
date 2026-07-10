@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { LayoutDashboard, Kanban, BarChart2, Megaphone, Users, Clock, Workflow, FileText, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Kanban, BarChart2, Megaphone, Users, Clock, Workflow, FileText, FileSignature, Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-type Page = 'dashboard' | 'pipeline' | 'insights' | 'campanhas' | 'leads' | 'atividades' | 'workflows' | 'templates'
+type Page = 'dashboard' | 'pipeline' | 'insights' | 'campanhas' | 'leads' | 'atividades' | 'contratos' | 'workflows' | 'templates'
 
 interface SidebarProps {
   activePage: Page
@@ -16,6 +16,7 @@ const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'campanhas',  label: 'Campanhas',  icon: <Megaphone size={20} /> },
   { id: 'leads',      label: 'Leads',      icon: <Users size={20} /> },
   { id: 'atividades', label: 'Atividades', icon: <Clock size={20} /> },
+  { id: 'contratos',  label: 'Contratos',  icon: <FileSignature size={20} /> },
   { id: 'workflows',  label: 'Workflows',  icon: <Workflow size={20} /> },
   { id: 'templates',  label: 'Templates',  icon: <FileText size={20} /> },
 ]

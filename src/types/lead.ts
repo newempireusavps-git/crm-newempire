@@ -109,6 +109,27 @@ export interface LeadActivity {
   metadata: Record<string, unknown>
 }
 
+export interface Contract {
+  id: string
+  created_at: string
+  lead_id: string | null
+  client_name: string
+  client_email: string
+  property_address: string | null
+  service_type: string
+  services_description: string | null
+  start_date: string | null
+  completion_date: string | null
+  payment_terms: string | null
+  status: string // 'pending' | 'signed'
+  signer_name: string | null
+  signed_at: string | null
+  contract_html: string | null
+  signed_html: string | null
+  followup_count?: number
+  next_followup_at?: string | null
+}
+
 export type CampaignChannel = 'email' | 'whatsapp' | 'instagram' | 'facebook' | 'sms'
 
 export interface CampaignStep {
