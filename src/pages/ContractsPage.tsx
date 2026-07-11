@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { FileSignature, Clock, CheckCircle2, Loader2, MapPin, Wrench, Calendar, Mail, Plus, X, Download } from 'lucide-react'
-import { fetchContracts } from '@/lib/supabase'
+import { FileSignature, Clock, CheckCircle2, Loader2, MapPin, Wrench, Calendar, Mail, Plus, X, Download, Trash2 } from 'lucide-react'
+import { fetchContracts, deleteContract } from '@/lib/supabase'
 import type { Contract } from '@/types/lead'
 import { SERVICE_TYPES } from '@/types/lead'
 import { formatDate } from '@/lib/utils'
@@ -43,7 +43,7 @@ function stripHtml(html: string | null): string {
     .trim()
 }
 
-function ContractCard({ contract, onView }: { contract: Contract; onView: (c: Contract) => void }) {
+function ContractCard({ contract, onView, onDelete }: { contract: Contract; onView: (c: Contract) => void; onDelete: (c: Contract) => void }) {
   const isSigned = contract.status === 'signed'
   let services: string[] = []
   try { services = JSON.parse(contract.services_description ?? '[]') } catch { /* not JSON */ }
@@ -55,14 +55,24 @@ function ContractCard({ contract, onView }: { contract: Contract; onView: (c: Co
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <p className="text-white text-sm font-semibold">{contract.client_name}</p>
-        <span className={`text-xs border rounded-full px-2 py-0.5 shrink-0 flex items-center gap-1 ${
-          isSigned
-            ? 'text-green-400 bg-green-400/10 border-green-400/20'
-            : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
-        }`}>
-          {isSigned ? <CheckCircle2 size={11} /> : <Clock size={11} />}
-          {isSigned ? 'Assinado' : 'Pendente'}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className={`text-xs border rounded-full px-2 py-0.5 flex items-center gap-1 ${
+            isSigned
+              ? 'text-green-400 bg-green-400/10 border-green-400/20'
+              : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+          }`}>
+            {isSigned ? <CheckCircle2 size={11} /> : <Clock size={11} />}
+            {isSigned ? 'Assinado' : 'Pendente'}
+          </span>
+          <span
+            role="button"
+            onClick={(e) => { e.stopPropagation(); onDelete(contract) }}
+            className="text-gray-500 hover:text-red-400 transition-colors p-1"
+            title="Excluir contrato"
+          >
+            <Trash2 size={13} />
+          </span>
+        </div>
       </div>
       <div className="space-y-1 text-xs text-gray-400">
         <div className="flex items-center gap-1.5">
@@ -226,6 +236,13 @@ export function ContractsPage() {
     loadContracts()
   }, [])
 
+  async function handleDelete(contract: Contract) {
+    if (!confirm(`Excluir o contrato de "${contract.client_name}"? Essa ação não pode ser desfeita.`)) return
+    await deleteContract(contract.id)
+    setContracts((prev) => prev.filter((c) => c.id !== contract.id))
+    setSelected((s) => (s?.id === contract.id ? null : s))
+  }
+
   const pending = useMemo(() => contracts.filter((c) => c.status !== 'signed'), [contracts])
   const signed = useMemo(() => contracts.filter((c) => c.status === 'signed'), [contracts])
 
@@ -285,7 +302,7 @@ export function ContractsPage() {
               {pending.length === 0 ? (
                 <p className="text-gray-600 text-sm text-center py-8">Nenhum contrato pendente 🎉</p>
               ) : (
-                pending.map((c) => <ContractCard key={c.id} contract={c} onView={setSelected} />)
+                pending.map((c) => <ContractCard key={c.id} contract={c} onView={setSelected} onDelete={(ct) => void handleDelete(ct)} />)
               )}
             </div>
           </div>
@@ -301,7 +318,7 @@ export function ContractsPage() {
               {signed.length === 0 ? (
                 <p className="text-gray-600 text-sm text-center py-8">Nenhum contrato assinado ainda</p>
               ) : (
-                signed.map((c) => <ContractCard key={c.id} contract={c} onView={setSelected} />)
+                signed.map((c) => <ContractCard key={c.id} contract={c} onView={setSelected} onDelete={(ct) => void handleDelete(ct)} />)
               )}
             </div>
           </div>
@@ -314,7 +331,15 @@ export function ContractsPage() {
           {selected && (
             <>
               <DialogHeader className="shrink-0">
-                <DialogTitle>{selected.client_name}</DialogTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <DialogTitle>{selected.client_name}</DialogTitle>
+                  <button
+                    onClick={() => void handleDelete(selected)}
+                    className="flex items-center gap-1.5 text-xs text-red-400/80 hover:text-red-400 border border-red-400/20 hover:border-red-400/40 rounded-lg px-2.5 py-1.5 transition-colors shrink-0"
+                  >
+                    <Trash2 size={12} /> Excluir
+                  </button>
+                </div>
                 <div className="flex items-center gap-2 text-xs mt-1">
                   <span className={`border rounded-full px-2 py-0.5 flex items-center gap-1 ${
                     selected.status === 'signed'

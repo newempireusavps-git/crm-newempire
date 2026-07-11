@@ -210,6 +210,11 @@ export async function fetchContracts(): Promise<Contract[]> {
   return (data ?? []) as Contract[]
 }
 
+export async function deleteContract(id: string): Promise<void> {
+  const { error } = await supabase.from('contracts').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ── Campaign Steps ────────────────────────────────────────────────────────────
 
 export async function fetchCampaignSteps(campaignId: string): Promise<CampaignStep[]> {
